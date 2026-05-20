@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.svelte-kit/
+frontend/.next/
+frontend/out/
+frontend/.expo/
+frontend/pnpm-debug.log*
+
+# Databases and Local Data
+backend/data/recipe_companion.db
+backend/data/chroma_db/
+*.db
+*.sqlite
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+frontend/.env
+frontend/.env.local
+
+# Operating System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Local scripts
+start.bat

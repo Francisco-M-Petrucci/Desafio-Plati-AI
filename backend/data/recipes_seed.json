@@ -1,0 +1,374 @@
+[
+  {
+    "id": 101,
+    "name": "Airfryer Garlic Parmesan Chicken Wings",
+    "minutes": 25,
+    "tags": ["chicken", "wings", "airfryer", "gluten-free", "low-carb", "autumn", "american", "easy"],
+    "ingredients": ["chicken wings", "olive oil", "garlic powder", "parmesan cheese", "salt", "black pepper", "parsley"],
+    "steps": [
+      "Pat the chicken wings completely dry with paper towels.",
+      "Toss the wings in a bowl with olive oil, garlic powder, salt, and black pepper.",
+      "Preheat your airfryer to 380°F (190°C).",
+      "Place wings in the airfryer basket in a single layer, ensuring they do not overlap.",
+      "Air fry for 15 minutes, flipping them halfway through.",
+      "Increase the temperature to 400°F (200°C) and fry for another 5 minutes until crispy.",
+      "Toss hot wings immediately with grated parmesan cheese and finely chopped parsley.",
+      "Serve warm."
+    ],
+    "description": "Crispy and delicious chicken wings made in the airfryer, seasoned with garlic and coated in savory parmesan cheese. Naturally gluten-free and low-carb!"
+  },
+  {
+    "id": 102,
+    "name": "Summer Watermelon Feta Salad",
+    "minutes": 10,
+    "tags": ["salad", "watermelon", "feta", "no-cook", "vegetarian", "gluten-free", "summer", "greek", "fresh"],
+    "ingredients": ["watermelon cubes", "feta cheese", "fresh mint leaves", "extra virgin olive oil", "lime juice", "red onion", "salt"],
+    "steps": [
+      "Cut the watermelon into bite-sized cubes, removing seeds, and place in a large bowl.",
+      "Thinly slice the red onion and rinse under cold water to reduce bite, then add to the bowl.",
+      "Chop or tear fresh mint leaves and scatter over the watermelon.",
+      "Crumble feta cheese generously over the salad.",
+      "Drizzle with extra virgin olive oil and fresh lime juice.",
+      "Gently toss to combine and serve chilled."
+    ],
+    "description": "A refreshing summer salad combining sweet watermelon, salty feta cheese, and fresh mint. The ultimate heat-buster!"
+  },
+  {
+    "id": 103,
+    "name": "Vegan Indian Lentil Curry (Dal)",
+    "minutes": 35,
+    "tags": ["lentils", "curry", "stove", "vegan", "vegetarian", "gluten-free", "lactose-free", "winter", "indian", "spicy"],
+    "ingredients": ["red lentils", "onion", "garlic", "ginger", "canned tomatoes", "coconut milk", "turmeric", "cumin", "garam masala", "spinach", "cilantro", "vegetable broth"],
+    "steps": [
+      "Rinse the red lentils thoroughly in cold water until the water runs clear.",
+      "In a large pot, sauté finely chopped onion, minced garlic, and grated ginger in a splash of oil until soft.",
+      "Add turmeric, cumin, and garam masala, stirring constantly for 1 minute to toast the spices.",
+      "Pour in the rinsed lentils, canned tomatoes, and vegetable broth.",
+      "Bring to a boil, then reduce heat, cover, and simmer for 20 minutes until lentils are tender.",
+      "Stir in the coconut milk and fresh spinach leaves, cooking until the spinach wilts.",
+      "Garnish with fresh cilantro and serve hot with rice or flatbread."
+    ],
+    "description": "A warm, comforting, and creamy red lentil curry packed with Indian spices and coconut milk. Perfect for cold winter nights."
+  },
+  {
+    "id": 104,
+    "name": "Classic Italian Margherita Pizza",
+    "minutes": 45,
+    "tags": ["pizza", "oven", "mixer", "vegetarian", "spring", "italian", "classic"],
+    "ingredients": ["pizza dough", "canned san marzano tomatoes", "fresh mozzarella cheese", "fresh basil leaves", "extra virgin olive oil", "salt"],
+    "steps": [
+      "Preheat your oven to the highest setting, ideally 500°F (260°C) with a pizza stone inside.",
+      "If making fresh dough, use a stand mixer to knead flour, water, yeast, and salt, then let it rise.",
+      "Stretch the pizza dough on a floured surface into a circle.",
+      "Crush the canned tomatoes by hand or blender with a pinch of salt to make a simple sauce.",
+      "Spread a thin layer of tomato sauce over the dough.",
+      "Tear fresh mozzarella cheese and distribute it evenly across the pizza.",
+      "Carefully transfer to the hot oven/pizza stone and bake for 8-10 minutes until the crust is charred and cheese is bubbly.",
+      "Immediately top with fresh basil leaves and a drizzle of extra virgin olive oil before slicing."
+    ],
+    "description": "Simplicity at its best: classic Italian pizza with crushed tomatoes, fresh mozzarella, and fresh basil on a crispy crust."
+  },
+  {
+    "id": 105,
+    "name": "Airfryer Banana Bread",
+    "minutes": 40,
+    "tags": ["banana-bread", "baking", "airfryer", "mixer", "vegetarian", "spring", "sweet"],
+    "ingredients": ["ripe bananas", "all-purpose flour", "butter", "sugar", "eggs", "baking soda", "vanilla extract", "salt", "cinnamon"],
+    "steps": [
+      "In a bowl, mash the ripe bananas using a fork.",
+      "Use a hand mixer to cream the softened butter and sugar together until fluffy.",
+      "Beat in the eggs one at a time, then add the mashed bananas and vanilla extract.",
+      "Gently fold in the flour, baking soda, salt, and cinnamon until just combined.",
+      "Grease a small loaf pan that fits inside your airfryer basket.",
+      "Pour the batter into the pan.",
+      "Air fry at 330°F (165°C) for about 30 minutes, or until a toothpick inserted in the center comes out clean.",
+      "Let cool before slicing."
+    ],
+    "description": "Super moist banana bread baked right in the airfryer. Great for breakfast or a sweet snack!"
+  },
+  {
+    "id": 106,
+    "name": "Chocolate Avocado Mousse",
+    "minutes": 10,
+    "tags": ["chocolate", "mousse", "mixer", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "sweet", "no-cook"],
+    "ingredients": ["ripe avocados", "cocoa powder", "maple syrup", "almond milk", "vanilla extract", "dark chocolate chips", "pinch of salt"],
+    "steps": [
+      "Cut the avocados in half, remove the pits, and scoop the flesh into a blender or food processor.",
+      "Add the cocoa powder, maple syrup, almond milk, vanilla extract, and a pinch of salt.",
+      "Blend on high speed until completely smooth, scraping down the sides as needed.",
+      "Taste and adjust sweetness by adding more maple syrup if desired.",
+      "Transfer the mousse to small serving cups and chill in the refrigerator for at least 1 hour.",
+      "Top with dark chocolate chips and fresh berries before serving."
+    ],
+    "description": "Rich, velvety chocolate mousse made healthy using ripe avocados. Completely vegan, gluten-free, and dairy-free."
+  },
+  {
+    "id": 107,
+    "name": "Spicy Mexican Chicken Tacos",
+    "minutes": 20,
+    "tags": ["tacos", "chicken", "stove", "gluten-free", "summer", "mexican", "spicy"],
+    "ingredients": ["chicken breast", "corn tortillas", "taco seasoning", "lime juice", "avocado", "cilantro", "salsa", "onion", "olive oil"],
+    "steps": [
+      "Dice the chicken breast into small, bite-sized pieces.",
+      "Toss chicken with olive oil and taco seasoning in a bowl.",
+      "Heat a skillet over medium-high heat and cook the chicken until cooked through and slightly charred (about 6-8 minutes).",
+      "Warm the corn tortillas in a dry skillet for 30 seconds on each side.",
+      "Assemble the tacos by placing chicken in the center of each tortilla.",
+      "Top with diced onion, fresh cilantro, sliced avocado, and a spoonful of salsa.",
+      "Squeeze fresh lime juice over the top and serve immediately."
+    ],
+    "description": "Fast and flavorful Mexican street-style chicken tacos served on warm corn tortillas. Perfect for summer gatherings!"
+  },
+  {
+    "id": 108,
+    "name": "Creamy Mushroom Risotto",
+    "minutes": 40,
+    "tags": ["risotto", "mushrooms", "stove", "vegetarian", "gluten-free", "winter", "italian", "comfort-food"],
+    "ingredients": ["arborio rice", "mixed mushrooms", "vegetable broth", "white wine", "onion", "garlic", "parmesan cheese", "butter", "olive oil", "thyme"],
+    "steps": [
+      "In a saucepan, heat the vegetable broth and keep it warm on low heat.",
+      "In a separate large pot, sauté sliced mushrooms with olive oil, garlic, and fresh thyme until golden, then set aside.",
+      "In the same pot, add butter and sauté finely chopped onion until translucent.",
+      "Add the arborio rice and toast for 2 minutes, stirring constantly.",
+      "Pour in the white wine and simmer until it is completely absorbed.",
+      "Add one ladle of hot vegetable broth, stirring constantly until absorbed. Repeat this process, adding broth ladle by ladle, for about 20 minutes until rice is creamy but al dente.",
+      "Stir the cooked mushrooms back into the risotto.",
+      "Remove from heat and stir in grated parmesan cheese and a tablespoon of butter. Cover and let sit for 2 minutes before serving."
+    ],
+    "description": "A classic Italian comfort dish. Creamy arborio rice simmered slowly with white wine, broth, and earthy wild mushrooms."
+  },
+  {
+    "id": 109,
+    "name": "Slow Cooker Beef Stew",
+    "minutes": 360,
+    "tags": ["beef", "stew", "slow-cooker", "stove", "winter", "american", "comfort-food"],
+    "ingredients": ["beef chuck roast", "potatoes", "carrots", "celery", "onion", "garlic", "beef broth", "tomato paste", "worcestershire sauce", "flour", "thyme", "rosemary"],
+    "steps": [
+      "Cut the beef chuck roast into 1-inch cubes and toss with flour, salt, and pepper.",
+      "Heat a tablespoon of oil in a skillet and sear the beef cubes on all sides until browned, then transfer to the slow cooker.",
+      "Chop potatoes, carrots, celery, and onion into bite-sized chunks and add to the slow cooker.",
+      "In a bowl, whisk beef broth, tomato paste, Worcestershire sauce, minced garlic, thyme, and rosemary.",
+      "Pour the broth mixture over the beef and vegetables.",
+      "Cover and cook on Low for 7-8 hours (or High for 4 hours) until beef is melt-in-your-mouth tender.",
+      "Adjust seasoning and serve hot in deep bowls."
+    ],
+    "description": "Rich and hearty traditional beef stew slow-cooked to perfection with root vegetables in a savory broth."
+  },
+  {
+    "id": 110,
+    "name": "Gluten-Free Almond Flour Pancakes",
+    "minutes": 15,
+    "tags": ["pancakes", "breakfast", "stove", "mixer", "vegetarian", "gluten-free", "spring", "easy"],
+    "ingredients": ["almond flour", "eggs", "maple syrup", "baking powder", "vanilla extract", "almond milk", "salt", "butter"],
+    "steps": [
+      "In a bowl, whisk the eggs, almond milk, maple syrup, and vanilla extract until well combined.",
+      "In a separate bowl, stir together almond flour, baking powder, and a pinch of salt.",
+      "Combine the wet and dry ingredients, mixing with a hand whisk until a smooth batter forms.",
+      "Melt a small pat of butter in a non-stick skillet over medium-low heat.",
+      "Pour 1/4 cup of batter into the skillet for each pancake.",
+      "Cook until bubbles form on the surface (about 3 minutes), then flip and cook the other side for 2 minutes until golden brown.",
+      "Serve warm with maple syrup and fresh fruit."
+    ],
+    "description": "Light, fluffy, and naturally gluten-free pancakes made with almond flour. A healthy breakfast option."
+  },
+  {
+    "id": 111,
+    "name": "Quick Airfryer Salmon with Asparagus",
+    "minutes": 15,
+    "tags": ["salmon", "fish", "airfryer", "gluten-free", "lactose-free", "spring", "healthy"],
+    "ingredients": ["salmon fillets", "asparagus spears", "lemon", "olive oil", "garlic powder", "dill", "salt", "black pepper"],
+    "steps": [
+      "Preheat the airfryer to 390°F (200°C).",
+      "Rub salmon fillets with olive oil, salt, pepper, and garlic powder.",
+      "Trim the woody ends of the asparagus and toss them in olive oil, salt, and pepper.",
+      "Place the salmon fillets in the center of the airfryer basket and arrange the asparagus around them.",
+      "Air fry for 8-10 minutes, depending on the thickness of the salmon, until the fish flakes easily with a fork and asparagus is tender-crisp.",
+      "Squeeze fresh lemon juice over the salmon and asparagus, and garnish with fresh dill before serving."
+    ],
+    "description": "A healthy, quick, and complete meal. Flaky salmon and roasted asparagus cooked in the airfryer in under 15 minutes."
+  },
+  {
+    "id": 112,
+    "name": "Fresh Vietnamese Spring Rolls",
+    "minutes": 25,
+    "tags": ["spring-rolls", "no-cook", "gluten-free", "lactose-free", "summer", "asian", "fresh"],
+    "ingredients": ["rice paper wrappers", "shrimp", "rice vermicelli noodles", "cucumber", "carrots", "fresh mint", "fresh cilantro", "peanut butter", "soy sauce", "hoisin sauce"],
+    "steps": [
+      "Cook shrimp and slice in half lengthwise. Cook rice noodles according to package instructions and drain.",
+      "Julienne the cucumber and carrots into thin matchsticks.",
+      "Fill a shallow dish with warm water. Dip one rice paper wrapper in the water for 5 seconds until it softens slightly, then lay flat on a clean surface.",
+      "Place 3 halves of shrimp (cut-side up) in the center, followed by a small handful of noodles, cucumber, carrot, mint, and cilantro.",
+      "Fold the sides of the wrapper inward, then roll up tightly from the bottom to encase the fillings.",
+      "Repeat for remaining rolls.",
+      "Make a dipping sauce by whisking peanut butter, hoisin sauce, soy sauce, and a splash of warm water.",
+      "Serve spring rolls cold with the peanut dipping sauce."
+    ],
+    "description": "Crisp, fresh vegetables, herbs, and tender shrimp wrapped in chewy rice paper. Served with a savory, creamy peanut dipping sauce."
+  },
+  {
+    "id": 113,
+    "name": "Classic French Onion Soup",
+    "minutes": 60,
+    "tags": ["soup", "stove", "oven", "winter", "french", "classic", "comfort-food"],
+    "ingredients": ["yellow onions", "beef broth", "baguette slices", "gruyere cheese", "butter", "olive oil", "garlic", "dry sherry", "thyme", "bay leaf"],
+    "steps": [
+      "Peel and thinly slice the yellow onions.",
+      "In a large pot, melt butter and olive oil over medium-low heat. Add onions and cook slowly for 40 minutes, stirring occasionally, until caramelized and deep brown.",
+      "Add minced garlic and cook for 1 minute.",
+      "Deglaze the pot with dry sherry, scraping up the browned bits on the bottom.",
+      "Add beef broth, fresh thyme, and a bay leaf. Simmer uncovered for 20 minutes.",
+      "Preheat the oven broiler.",
+      "Toast baguette slices. Ladle hot soup into oven-safe bowls.",
+      "Top each bowl with a slice of toasted baguette and a generous layer of grated Gruyere cheese.",
+      "Place bowls under the broiler for 3-4 minutes until the cheese is melted, bubbly, and golden brown."
+    ],
+    "description": "Rich caramelized onion soup in a savory beef broth, crowned with toasted French bread and melted Gruyere cheese."
+  },
+  {
+    "id": 114,
+    "name": "Crispy Airfryer Tofu",
+    "minutes": 20,
+    "tags": ["tofu", "airfryer", "vegan", "vegetarian", "gluten-free", "lactose-free", "autumn", "asian"],
+    "ingredients": ["extra-firm tofu", "soy sauce", "sesame oil", "cornstarch", "garlic powder", "green onions", "sesame seeds"],
+    "steps": [
+      "Press the block of tofu between paper towels under a heavy object for 15 minutes to remove excess moisture.",
+      "Cut the pressed tofu into 1-inch cubes.",
+      "In a bowl, toss the tofu cubes with soy sauce, sesame oil, and garlic powder.",
+      "Sprinkle cornstarch over the tofu and toss gently until every cube is evenly coated (this is the key to crispiness).",
+      "Preheat the airfryer to 400°F (200°C).",
+      "Arrange tofu in a single layer in the basket and air fry for 12-15 minutes, shaking the basket halfway, until crispy and golden.",
+      "Garnish with sliced green onions and sesame seeds before serving."
+    ],
+    "description": "Super crispy, seasoned tofu cubes cooked in the airfryer without deep frying. Naturally vegan and gluten-free!"
+  },
+  {
+    "id": 115,
+    "name": "Traditional Greek Salad",
+    "minutes": 10,
+    "tags": ["salad", "no-cook", "vegetarian", "gluten-free", "summer", "greek", "fresh"],
+    "ingredients": ["cucumbers", "cherry tomatoes", "red onion", "kalamata olives", "feta cheese block", "extra virgin olive oil", "dried oregano", "red wine vinegar", "salt"],
+    "steps": [
+      "Chop cucumbers and tomatoes into chunky pieces and add to a salad bowl.",
+      "Slice the red onion into thin rings and add to the bowl along with kalamata olives.",
+      "In a small jar, whisk extra virgin olive oil, red wine vinegar, dried oregano, and a pinch of salt to make the dressing.",
+      "Pour the dressing over the salad and toss gently.",
+      "Place a thick slice of feta cheese on top of the salad (traditionally, the cheese is not crumbled).",
+      "Drizzle the cheese with a little olive oil and sprinkle with more oregano before serving."
+    ],
+    "description": "An authentic Greek salad made with ripe tomatoes, crisp cucumbers, red onion, olives, and a slab of rich feta cheese."
+  },
+  {
+    "id": 116,
+    "name": "Creamy Tomato Basil Soup",
+    "minutes": 30,
+    "tags": ["soup", "tomato", "stove", "mixer", "vegetarian", "gluten-free", "autumn", "italian"],
+    "ingredients": ["canned crushed tomatoes", "fresh basil leaves", "vegetable broth", "onion", "garlic", "heavy cream", "butter", "olive oil", "salt", "black pepper"],
+    "steps": [
+      "In a pot, heat butter and olive oil over medium heat. Sauté diced onion and minced garlic until soft and translucent.",
+      "Add canned crushed tomatoes and vegetable broth, bring to a boil, then reduce heat and simmer for 15 minutes.",
+      "Stir in fresh basil leaves.",
+      "Use an immersion blender (or transfer to a standard blender) and process until completely smooth and creamy.",
+      "Return the soup to low heat and stir in the heavy cream.",
+      "Season with salt and pepper to taste. Serve warm, garnished with a fresh basil leaf."
+    ],
+    "description": "Smooth and velvety tomato soup infused with fresh basil and finished with a touch of heavy cream. Classic comfort food."
+  },
+  {
+    "id": 117,
+    "name": "One-Pot Pasta Primavera",
+    "minutes": 20,
+    "tags": ["pasta", "stove", "vegetarian", "spring", "italian", "easy"],
+    "ingredients": ["penne pasta", "cherry tomatoes", "zucchini", "bell pepper", "peas", "vegetable broth", "onion", "garlic", "parmesan cheese", "olive oil", "lemon zest"],
+    "steps": [
+      "Thinly slice the onion, garlic, zucchini, and bell pepper.",
+      "In a large pot, combine dry penne pasta, sliced vegetables, cherry tomatoes, and peas.",
+      "Pour in vegetable broth and a drizzle of olive oil, ensuring the pasta is mostly submerged.",
+      "Bring to a boil over high heat, then reduce to medium and cook uncovered, stirring frequently to prevent sticking, for about 10-12 minutes (until pasta is al dente and liquid has reduced to a saucy consistency).",
+      "Stir in grated parmesan cheese and fresh lemon zest.",
+      "Season with salt and pepper, and serve immediately."
+    ],
+    "description": "A quick, fresh, and colorful pasta dish loaded with spring vegetables, cooked entirely in one pot."
+  },
+  {
+    "id": 118,
+    "name": "Microwave Mug Chocolate Cake",
+    "minutes": 5,
+    "tags": ["cake", "microwave", "vegetarian", "sweet", "easy", "quick"],
+    "ingredients": ["all-purpose flour", "sugar", "cocoa powder", "baking powder", "milk", "butter", "chocolate chips", "vanilla extract"],
+    "steps": [
+      "In a microwave-safe mug, whisk together the flour, sugar, cocoa powder, and baking powder.",
+      "Add the milk, melted butter, and vanilla extract, stirring with a fork until a smooth batter forms.",
+      "Drop chocolate chips into the center of the batter.",
+      "Microwave on high for 60 to 70 seconds. Do not overcook or it will become dry.",
+      "Let cool for 2 minutes before eating directly from the mug."
+    ],
+    "description": "A warm, gooey chocolate cake made in a mug in just 5 minutes using the microwave. Perfect for late-night cravings!"
+  },
+  {
+    "id": 119,
+    "name": "Mexican Fresh Guacamole",
+    "minutes": 10,
+    "tags": ["guacamole", "no-cook", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "mexican", "fresh"],
+    "ingredients": ["ripe avocados", "lime", "red onion", "cilantro", "roma tomato", "jalapeno", "salt"],
+    "steps": [
+      "Slice avocados, remove pits, and scoop the flesh into a bowl.",
+      "Mash the avocado with a fork or potato masher, leaving it slightly chunky.",
+      "Stir in finely diced red onion, seeded and diced roma tomato, minced jalapeno, and chopped cilantro.",
+      "Squeeze fresh lime juice over the mixture and sprinkle with salt.",
+      "Mix gently to combine.",
+      "Serve immediately with tortilla chips or store with plastic wrap pressed directly against the surface to prevent browning."
+    ],
+    "description": "Authentic, fresh, and chunky Mexican guacamole made with ripe avocados, lime juice, tomatoes, and cilantro."
+  },
+  {
+    "id": 120,
+    "name": "Indian Butter Chicken",
+    "minutes": 35,
+    "tags": ["chicken", "stove", "mixer", "winter", "indian", "spicy", "comfort-food"],
+    "ingredients": ["chicken thigh", "greek yogurt", "garlic", "ginger", "garam masala", "chili powder", "butter", "onion", "canned tomato sauce", "heavy cream", "salt"],
+    "steps": [
+      "Cut chicken thighs into bite-sized pieces and marinate in Greek yogurt, minced garlic, ginger, and spices for at least 15 minutes.",
+      "Heat a large skillet over medium-high heat, add butter, and sear the marinated chicken until browned (about 5 minutes), then remove and set aside (it doesn't need to be cooked through yet).",
+      "In the same skillet, add more butter and sauté finely chopped onion until soft.",
+      "Add tomato sauce, garam masala, and chili powder. Simmer for 10 minutes.",
+      "Transfer the sauce to a blender and process until velvety smooth (or use an immersion mixer).",
+      "Return the smooth sauce to the skillet, stir in the heavy cream, and add the seared chicken back in.",
+      "Simmer on low for 10-15 minutes until chicken is cooked through and sauce is thick. Serve with warm naan bread or basmati rice."
+    ],
+    "description": "Tender chicken pieces simmered in a rich, creamy, and buttery spiced tomato sauce. A favorite Indian restaurant classic."
+  },
+  {
+    "id": 121,
+    "name": "Airfryer Sweet Potato Fries",
+    "minutes": 20,
+    "tags": ["sweet-potato", "fries", "airfryer", "vegan", "vegetarian", "gluten-free", "lactose-free", "autumn"],
+    "ingredients": ["sweet potatoes", "olive oil", "cornstarch", "paprika", "garlic powder", "salt", "black pepper"],
+    "steps": [
+      "Peel sweet potatoes and cut them into 1/4-inch thick matchsticks.",
+      "Soak the cut potatoes in cold water for 30 minutes to remove excess starch (makes them crispier). Drain and pat completely dry.",
+      "Toss dry sweet potatoes in a bowl with olive oil, garlic powder, paprika, pepper, and cornstarch until evenly coated.",
+      "Preheat the airfryer to 380°F (190°C).",
+      "Place potatoes in the airfryer basket, making sure not to overcrowd it (cook in batches if needed).",
+      "Air fry for 15-18 minutes, shaking the basket every 5 minutes.",
+      "Sprinkle with salt immediately after cooking and serve hot."
+    ],
+    "description": "Crispy and sweet air-fried sweet potato fries seasoned with paprika and garlic. A healthy alternative to deep frying."
+  },
+  {
+    "id": 122,
+    "name": "Thai Green Curry with Vegetables",
+    "minutes": 25,
+    "tags": ["curry", "stove", "vegan", "vegetarian", "gluten-free", "lactose-free", "winter", "asian", "spicy"],
+    "ingredients": ["coconut milk", "thai green curry paste", "bell pepper", "bamboo shoots", "broccoli florets", "soy sauce", "brown sugar", "basil leaves", "lime juice", "tofu"],
+    "steps": [
+      "In a large skillet or wok, heat a tablespoon of oil and fry the Thai green curry paste for 1 minute until fragrant.",
+      "Gradually pour in the coconut milk, stirring to dissolve the curry paste.",
+      "Bring to a simmer and add cubed tofu, sliced bell pepper, broccoli florets, and bamboo shoots.",
+      "Simmer for 10-12 minutes until the vegetables are tender-crisp.",
+      "Stir in soy sauce, brown sugar, and a squeeze of fresh lime juice.",
+      "Remove from heat and stir in fresh Thai basil leaves.",
+      "Serve hot with jasmine rice."
+    ],
+    "description": "A fragrant, spicy, and coconut-creamy Thai curry loaded with fresh green vegetables and tofu."
+  }
+]
