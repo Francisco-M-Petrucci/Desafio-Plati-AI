@@ -30,19 +30,45 @@ def get_user_profile_data(user_id: int) -> Dict[str, Any]:
         db.close()
 
 
-def update_ingredients_in_db(user_id: int, action: str, items: List[Dict[str, Any]]) -> str:
+def update_ingredients_in_db(user_id: int, action: str, items: Any) -> str:
     """
     Updates the user's ingredients list in SQLite.
     action: 'add' or 'remove'
     items: list of dicts like {"name": "tomato", "quantity": 2.0, "unit": "unit"}
     """
+    # Normalize input types (sometimes the LLM passes stringified JSON arrays or single dictionaries)
+    if isinstance(items, str):
+        try:
+            import json
+            items = json.loads(items)
+        except Exception:
+            pass
+
+    if isinstance(items, dict):
+        items = [items]
+    elif not isinstance(items, list):
+        items = []
+
     db = SessionLocal()
     try:
         updated_items = []
         for item in items:
-            name = item["name"].strip().lower()
-            qty = float(item.get("quantity", 1.0))
-            unit = item.get("unit", "unit").strip().lower()
+            # Handle Pydantic models or standard dictionaries
+            if hasattr(item, "model_dump"):
+                item_dict = item.model_dump()
+            elif hasattr(item, "dict"):
+                item_dict = item.dict()
+            elif isinstance(item, dict):
+                item_dict = item
+            else:
+                try:
+                    item_dict = dict(item)
+                except Exception:
+                    item_dict = {}
+
+            name = item_dict.get("name", "").strip().lower()
+            qty = float(item_dict.get("quantity", 1.0))
+            unit = item_dict.get("unit", "unit").strip().lower()
 
             # Find existing ingredient
             existing = db.query(Ingredient).filter(

@@ -1,6 +1,7 @@
 import os
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
@@ -30,7 +31,7 @@ def get_llm() -> ChatOpenAI:
 
 # 2. Define LangChain Structured Tools for LLM Tool Binding
 @tool
-def search_recipes_tool(query: str, culture: str = None, season: str = None) -> str:
+def search_recipes_tool(query: str, culture: Optional[str] = None, season: Optional[str] = None) -> str:
     """
     Search the Food.com Recipes knowledge base for recipes.
     Parameters:
@@ -56,8 +57,13 @@ def search_recipes_tool(query: str, culture: str = None, season: str = None) -> 
     return "\n---\n".join(formatted)
 
 
+class InventoryItem(BaseModel):
+    name: str = Field(description="The lowercased name of the ingredient (e.g., 'milk', 'tomato')")
+    quantity: float = Field(default=1.0, description="The quantity of the ingredient acquired or used")
+    unit: str = Field(default="unit", description="The unit of measurement (e.g., 'kg', 'g', 'unit')")
+
 @tool
-def update_inventory_tool(action: str, items: List[Dict[str, Any]]) -> str:
+def update_inventory_tool(action: str, items: List[InventoryItem]) -> str:
     """
     Updates the user's kitchen ingredients inventory.
     Parameters:
