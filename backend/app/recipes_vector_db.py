@@ -1,6 +1,6 @@
 import os
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from langchain_core.embeddings import Embeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -40,6 +40,7 @@ class RecipeVectorDB:
         self.persist_directory = persist_directory
         self.embeddings = get_embeddings_model()
         self.vector_store = None
+        self._metadata_cache = None  # Cache for recipe metadata (avoids repeated Chroma queries)
         self._init_db()
 
     def _init_db(self):
@@ -84,26 +85,158 @@ class RecipeVectorDB:
                 "ingredients": json.dumps(r["ingredients"]),
                 "steps": json.dumps(r["steps"]),
                 "tags": json.dumps(r["tags"]),
-                "description": r["description"]
+                "description": r["description"],
+                # New structured metadata for pre-filtering
+                "required_appliances": json.dumps(r.get("required_appliances", [])),
+                "cuisine_type": r.get("cuisine_type", ""),
+                "dietary_tags": json.dumps(r.get("dietary_tags", []))
             }
             documents.append(Document(page_content=content, metadata=metadata))
 
         self.vector_store.add_documents(documents)
+        # Invalidate metadata cache after seeding
+        self._metadata_cache = None
         print(f"Successfully indexed {len(documents)} recipes in Chroma Vector DB.")
+
+    def get_all_recipe_metadata(self) -> List[Dict[str, Any]]:
+        """
+        Returns lightweight metadata for ALL recipes (no embeddings, no full content).
+        Used by the deterministic pre-filter to check appliances, dietary tags, and cuisine.
+        Results are cached in memory since recipe data does not change at runtime.
+        """
+        if self._metadata_cache is not None:
+            return self._metadata_cache
+
+        if not self.vector_store:
+            return []
+
+        try:
+            collection = self.vector_store._collection
+            results = collection.get()
+
+            recipes = []
+            for meta in results["metadatas"]:
+                recipes.append({
+                    "id": meta.get("id"),
+                    "name": meta.get("name", ""),
+                    "required_appliances": json.loads(meta.get("required_appliances", "[]")),
+                    "cuisine_type": meta.get("cuisine_type", ""),
+                    "dietary_tags": json.loads(meta.get("dietary_tags", "[]"))
+                })
+
+            self._metadata_cache = recipes
+            return recipes
+        except Exception as e:
+            print(f"Error loading recipe metadata: {e}")
+            return []
+
+    def get_recipe_by_id(self, recipe_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Directly queries Chroma for a recipe by its ID.
+        Returns the recipe dict (including steps and ingredients) or None if not found.
+        """
+        if not self.vector_store:
+            return None
+        try:
+            collection = self.vector_store._collection
+            results = collection.get(where={"id": recipe_id})
+            if results and results["metadatas"]:
+                meta = results["metadatas"][0]
+                return {
+                    "id": meta.get("id"),
+                    "name": meta.get("name"),
+                    "minutes": meta.get("minutes"),
+                    "ingredients": json.loads(meta.get("ingredients", "[]")),
+                    "steps": json.loads(meta.get("steps", "[]")),
+                    "tags": json.loads(meta.get("tags", "[]")),
+                    "description": meta.get("description")
+                }
+        except Exception as e:
+            print(f"Error fetching recipe by ID {recipe_id}: {e}")
+        return None
+
+    def search_recipes_filtered(
+        self,
+        query: str,
+        recipe_ids: Set[int],
+        limit: int = 3,
+        culture: Optional[str] = None,
+        season: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Search recipes constrained to a pre-filtered set of recipe IDs.
+        Uses vector similarity search then post-filters by ID membership, culture, and season.
+        """
+        if culture in (None, "null", "None", "NoneType", ""):
+            culture = None
+        if season in (None, "null", "None", "NoneType", ""):
+            season = None
+
+        if not self.vector_store:
+            return []
+
+        recipe_id_set = set(recipe_ids)
+        results = self.vector_store.similarity_search(query, k=100)
+
+        processed_results = []
+        for doc in results:
+            meta = doc.metadata
+            recipe_id = meta.get("id")
+
+            # Filter by allowed IDs (the pre-filtered compatible set)
+            if recipe_id not in recipe_id_set:
+                continue
+
+            # Filter by cuisine type (uses the new structured field, not tags)
+            if culture:
+                recipe_cuisine = meta.get("cuisine_type", "")
+                if culture.lower() != recipe_cuisine.lower():
+                    continue
+
+            # Filter by season (still uses tags since season is not a separate field)
+            if season:
+                tags = json.loads(meta.get("tags", "[]"))
+                if season.lower() not in [t.lower() for t in tags]:
+                    continue
+
+            ingredients = json.loads(meta.get("ingredients", "[]"))
+            steps = json.loads(meta.get("steps", "[]"))
+            tags = json.loads(meta.get("tags", "[]"))
+
+            processed_results.append({
+                "id": recipe_id,
+                "name": meta.get("name"),
+                "minutes": meta.get("minutes"),
+                "ingredients": ingredients,
+                "steps": steps,
+                "tags": tags,
+                "description": meta.get("description")
+            })
+
+            if len(processed_results) >= limit:
+                break
+
+        return processed_results
 
     def search_recipes(
         self,
         query: str,
-        limit: int = 5,
+        limit: int = 3,
         culture: Optional[str] = None,
         season: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Search recipes with optional culture and season tag filtering."""
+        """Search recipes with optional culture and season tag filtering.
+        Kept for backward compatibility with the /api/recipes exploration endpoint."""
+        if culture in (None, "null", "None", "NoneType", ""):
+            culture = None
+        if season in (None, "null", "None", "NoneType", ""):
+            season = None
+
         if not self.vector_store:
             return []
 
-        # Perform similarity search
-        results = self.vector_store.similarity_search(query, k=limit * 2)
+        # Perform similarity search with a larger pool of candidates to avoid post-filtering starvation
+        results = self.vector_store.similarity_search(query, k=100)
 
         processed_results = []
         for doc in results:

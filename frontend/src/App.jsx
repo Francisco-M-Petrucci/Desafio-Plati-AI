@@ -15,7 +15,8 @@ function App() {
     ingredients: [],
     appliances: [],
     restrictions: [],
-    facts: []
+    facts: [],
+    temporary_preferences: []
   });
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
@@ -36,7 +37,8 @@ function App() {
         ingredients: [],
         appliances: [],
         restrictions: [],
-        facts: []
+        facts: [],
+        temporary_preferences: []
       });
     }
   }, [user]);

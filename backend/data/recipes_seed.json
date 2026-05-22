@@ -2,6 +2,9 @@
   {
     "id": 101,
     "name": "Airfryer Garlic Parmesan Chicken Wings",
+    "required_appliances": ["airfryer"],
+    "cuisine_type": "american",
+    "dietary_tags": ["gluten-free", "low-carb"],
     "minutes": 25,
     "tags": ["chicken", "wings", "airfryer", "gluten-free", "low-carb", "autumn", "american", "easy"],
     "ingredients": ["chicken wings", "olive oil", "garlic powder", "parmesan cheese", "salt", "black pepper", "parsley"],
@@ -20,6 +23,9 @@
   {
     "id": 102,
     "name": "Summer Watermelon Feta Salad",
+    "required_appliances": [],
+    "cuisine_type": "greek",
+    "dietary_tags": ["vegetarian", "gluten-free"],
     "minutes": 10,
     "tags": ["salad", "watermelon", "feta", "no-cook", "vegetarian", "gluten-free", "summer", "greek", "fresh"],
     "ingredients": ["watermelon cubes", "feta cheese", "fresh mint leaves", "extra virgin olive oil", "lime juice", "red onion", "salt"],
@@ -36,6 +42,9 @@
   {
     "id": 103,
     "name": "Vegan Indian Lentil Curry (Dal)",
+    "required_appliances": ["stove"],
+    "cuisine_type": "indian",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
     "minutes": 35,
     "tags": ["lentils", "curry", "stove", "vegan", "vegetarian", "gluten-free", "lactose-free", "winter", "indian", "spicy"],
     "ingredients": ["red lentils", "onion", "garlic", "ginger", "canned tomatoes", "coconut milk", "turmeric", "cumin", "garam masala", "spinach", "cilantro", "vegetable broth"],
@@ -53,6 +62,9 @@
   {
     "id": 104,
     "name": "Classic Italian Margherita Pizza",
+    "required_appliances": ["oven", "blender/mixer"],
+    "cuisine_type": "italian",
+    "dietary_tags": ["vegetarian"],
     "minutes": 45,
     "tags": ["pizza", "oven", "mixer", "vegetarian", "spring", "italian", "classic"],
     "ingredients": ["pizza dough", "canned san marzano tomatoes", "fresh mozzarella cheese", "fresh basil leaves", "extra virgin olive oil", "salt"],
@@ -71,6 +83,9 @@
   {
     "id": 105,
     "name": "Airfryer Banana Bread",
+    "required_appliances": ["airfryer", "blender/mixer"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegetarian"],
     "minutes": 40,
     "tags": ["banana-bread", "baking", "airfryer", "mixer", "vegetarian", "spring", "sweet"],
     "ingredients": ["ripe bananas", "all-purpose flour", "butter", "sugar", "eggs", "baking soda", "vanilla extract", "salt", "cinnamon"],
@@ -89,6 +104,9 @@
   {
     "id": 106,
     "name": "Chocolate Avocado Mousse",
+    "required_appliances": ["blender/mixer"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
     "minutes": 10,
     "tags": ["chocolate", "mousse", "mixer", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "sweet", "no-cook"],
     "ingredients": ["ripe avocados", "cocoa powder", "maple syrup", "almond milk", "vanilla extract", "dark chocolate chips", "pinch of salt"],
@@ -105,6 +123,9 @@
   {
     "id": 107,
     "name": "Spicy Mexican Chicken Tacos",
+    "required_appliances": ["stove"],
+    "cuisine_type": "mexican",
+    "dietary_tags": ["gluten-free"],
     "minutes": 20,
     "tags": ["tacos", "chicken", "stove", "gluten-free", "summer", "mexican", "spicy"],
     "ingredients": ["chicken breast", "corn tortillas", "taco seasoning", "lime juice", "avocado", "cilantro", "salsa", "onion", "olive oil"],
@@ -122,6 +143,9 @@
   {
     "id": 108,
     "name": "Creamy Mushroom Risotto",
+    "required_appliances": ["stove"],
+    "cuisine_type": "italian",
+    "dietary_tags": ["vegetarian", "gluten-free"],
     "minutes": 40,
     "tags": ["risotto", "mushrooms", "stove", "vegetarian", "gluten-free", "winter", "italian", "comfort-food"],
     "ingredients": ["arborio rice", "mixed mushrooms", "vegetable broth", "white wine", "onion", "garlic", "parmesan cheese", "butter", "olive oil", "thyme"],
@@ -140,6 +164,9 @@
   {
     "id": 109,
     "name": "Slow Cooker Beef Stew",
+    "required_appliances": ["slow-cooker", "stove"],
+    "cuisine_type": "american",
+    "dietary_tags": [],
     "minutes": 360,
     "tags": ["beef", "stew", "slow-cooker", "stove", "winter", "american", "comfort-food"],
     "ingredients": ["beef chuck roast", "potatoes", "carrots", "celery", "onion", "garlic", "beef broth", "tomato paste", "worcestershire sauce", "flour", "thyme", "rosemary"],
@@ -157,6 +184,9 @@
   {
     "id": 110,
     "name": "Gluten-Free Almond Flour Pancakes",
+    "required_appliances": ["stove", "blender/mixer"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegetarian", "gluten-free"],
     "minutes": 15,
     "tags": ["pancakes", "breakfast", "stove", "mixer", "vegetarian", "gluten-free", "spring", "easy"],
     "ingredients": ["almond flour", "eggs", "maple syrup", "baking powder", "vanilla extract", "almond milk", "salt", "butter"],
@@ -174,6 +204,9 @@
   {
     "id": 111,
     "name": "Quick Airfryer Salmon with Asparagus",
+    "required_appliances": ["airfryer"],
+    "cuisine_type": "",
+    "dietary_tags": ["gluten-free", "lactose-free"],
     "minutes": 15,
     "tags": ["salmon", "fish", "airfryer", "gluten-free", "lactose-free", "spring", "healthy"],
     "ingredients": ["salmon fillets", "asparagus spears", "lemon", "olive oil", "garlic powder", "dill", "salt", "black pepper"],
@@ -190,6 +223,9 @@
   {
     "id": 112,
     "name": "Fresh Vietnamese Spring Rolls",
+    "required_appliances": [],
+    "cuisine_type": "asian",
+    "dietary_tags": ["gluten-free", "lactose-free"],
     "minutes": 25,
     "tags": ["spring-rolls", "no-cook", "gluten-free", "lactose-free", "summer", "asian", "fresh"],
     "ingredients": ["rice paper wrappers", "shrimp", "rice vermicelli noodles", "cucumber", "carrots", "fresh mint", "fresh cilantro", "peanut butter", "soy sauce", "hoisin sauce"],
@@ -208,6 +244,9 @@
   {
     "id": 113,
     "name": "Classic French Onion Soup",
+    "required_appliances": ["stove", "oven"],
+    "cuisine_type": "french",
+    "dietary_tags": [],
     "minutes": 60,
     "tags": ["soup", "stove", "oven", "winter", "french", "classic", "comfort-food"],
     "ingredients": ["yellow onions", "beef broth", "baguette slices", "gruyere cheese", "butter", "olive oil", "garlic", "dry sherry", "thyme", "bay leaf"],
@@ -227,6 +266,9 @@
   {
     "id": 114,
     "name": "Crispy Airfryer Tofu",
+    "required_appliances": ["airfryer"],
+    "cuisine_type": "asian",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
     "minutes": 20,
     "tags": ["tofu", "airfryer", "vegan", "vegetarian", "gluten-free", "lactose-free", "autumn", "asian"],
     "ingredients": ["extra-firm tofu", "soy sauce", "sesame oil", "cornstarch", "garlic powder", "green onions", "sesame seeds"],
@@ -244,6 +286,9 @@
   {
     "id": 115,
     "name": "Traditional Greek Salad",
+    "required_appliances": [],
+    "cuisine_type": "greek",
+    "dietary_tags": ["vegetarian", "gluten-free"],
     "minutes": 10,
     "tags": ["salad", "no-cook", "vegetarian", "gluten-free", "summer", "greek", "fresh"],
     "ingredients": ["cucumbers", "cherry tomatoes", "red onion", "kalamata olives", "feta cheese block", "extra virgin olive oil", "dried oregano", "red wine vinegar", "salt"],
@@ -260,6 +305,9 @@
   {
     "id": 116,
     "name": "Creamy Tomato Basil Soup",
+    "required_appliances": ["stove", "blender/mixer"],
+    "cuisine_type": "italian",
+    "dietary_tags": ["vegetarian", "gluten-free"],
     "minutes": 30,
     "tags": ["soup", "tomato", "stove", "mixer", "vegetarian", "gluten-free", "autumn", "italian"],
     "ingredients": ["canned crushed tomatoes", "fresh basil leaves", "vegetable broth", "onion", "garlic", "heavy cream", "butter", "olive oil", "salt", "black pepper"],
@@ -276,6 +324,9 @@
   {
     "id": 117,
     "name": "One-Pot Pasta Primavera",
+    "required_appliances": ["stove"],
+    "cuisine_type": "italian",
+    "dietary_tags": ["vegetarian"],
     "minutes": 20,
     "tags": ["pasta", "stove", "vegetarian", "spring", "italian", "easy"],
     "ingredients": ["penne pasta", "cherry tomatoes", "zucchini", "bell pepper", "peas", "vegetable broth", "onion", "garlic", "parmesan cheese", "olive oil", "lemon zest"],
@@ -292,6 +343,9 @@
   {
     "id": 118,
     "name": "Microwave Mug Chocolate Cake",
+    "required_appliances": ["microwave"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegetarian"],
     "minutes": 5,
     "tags": ["cake", "microwave", "vegetarian", "sweet", "easy", "quick"],
     "ingredients": ["all-purpose flour", "sugar", "cocoa powder", "baking powder", "milk", "butter", "chocolate chips", "vanilla extract"],
@@ -307,6 +361,9 @@
   {
     "id": 119,
     "name": "Mexican Fresh Guacamole",
+    "required_appliances": [],
+    "cuisine_type": "mexican",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
     "minutes": 10,
     "tags": ["guacamole", "no-cook", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "mexican", "fresh"],
     "ingredients": ["ripe avocados", "lime", "red onion", "cilantro", "roma tomato", "jalapeno", "salt"],
@@ -323,6 +380,9 @@
   {
     "id": 120,
     "name": "Indian Butter Chicken",
+    "required_appliances": ["stove", "blender/mixer"],
+    "cuisine_type": "indian",
+    "dietary_tags": [],
     "minutes": 35,
     "tags": ["chicken", "stove", "mixer", "winter", "indian", "spicy", "comfort-food"],
     "ingredients": ["chicken thigh", "greek yogurt", "garlic", "ginger", "garam masala", "chili powder", "butter", "onion", "canned tomato sauce", "heavy cream", "salt"],
@@ -340,6 +400,9 @@
   {
     "id": 121,
     "name": "Airfryer Sweet Potato Fries",
+    "required_appliances": ["airfryer"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
     "minutes": 20,
     "tags": ["sweet-potato", "fries", "airfryer", "vegan", "vegetarian", "gluten-free", "lactose-free", "autumn"],
     "ingredients": ["sweet potatoes", "olive oil", "cornstarch", "paprika", "garlic powder", "salt", "black pepper"],
@@ -357,6 +420,9 @@
   {
     "id": 122,
     "name": "Thai Green Curry with Vegetables",
+    "required_appliances": ["stove"],
+    "cuisine_type": "asian",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
     "minutes": 25,
     "tags": ["curry", "stove", "vegan", "vegetarian", "gluten-free", "lactose-free", "winter", "asian", "spicy"],
     "ingredients": ["coconut milk", "thai green curry paste", "bell pepper", "bamboo shoots", "broccoli florets", "soy sauce", "brown sugar", "basil leaves", "lime juice", "tofu"],
