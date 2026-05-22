@@ -13,6 +13,9 @@ class AgentState(TypedDict):
     # Collected context from DB
     user_profile: Dict[str, Any]
     
+    # Pre-filtered recipe IDs (compatible with user's appliances and dietary restrictions)
+    compatible_recipe_ids: List[int]
+    
     # Recipes retrieved from the vector DB (RAG)
     rag_recipes: List[Dict[str, Any]]
     

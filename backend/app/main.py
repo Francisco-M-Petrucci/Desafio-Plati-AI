@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.database import get_db, engine, Base
-from app.models import User, Appliance, Ingredient, DietaryRestriction, ChatMessage, UserFact
-from app.agent.graph import agent_graph
+from app.models import User, Appliance, Ingredient, DietaryRestriction, ChatMessage, UserFact, TemporaryPreference
+from app.agent.graph import agent_graph, extract_facts_from_state
 from app.agent.tools import get_user_profile_data
 from app.ocr import parse_receipt_image
 from app.recipes_vector_db import RecipeVectorDB
@@ -157,7 +157,7 @@ def update_restrictions(user_id: int, req: RestrictionUpdate, db: Session = Depe
 
 
 @app.post("/api/chat")
-def chat(req: ChatRequest, db: Session = Depends(get_db)):
+def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Exposes chat agent endpoint, loading history, running graph, and saving history."""
     user = db.query(User).filter(User.id == req.user_id).first()
     if not user:
@@ -170,12 +170,13 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
 
     # Map database messages to LangChain message formats
     from langchain_core.messages import HumanMessage, AIMessage
+    from app.agent.memory import minify_assistant_message
+    
     formatted_messages = []
     for msg in history_msgs:
-        if msg.role == "user":
-            formatted_messages.append(HumanMessage(content=msg.content))
-        else:
-            formatted_messages.append(AIMessage(content=msg.content))
+        if msg.role != "user":
+            minified_content = minify_assistant_message(msg.content)
+            formatted_messages.append(AIMessage(content=minified_content))
 
     # Add the current new message
     formatted_messages.append(HumanMessage(content=req.message))
@@ -194,6 +195,7 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
             "user_id": req.user_id,
             "user_name": user.username,
             "user_profile": profile_data,
+            "compatible_recipe_ids": [],
             "rag_recipes": [],
             "actions": []
         }
@@ -207,6 +209,9 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
         # Save assistant response to database
         db.add(ChatMessage(user_id=req.user_id, role="assistant", content=response_text))
         db.commit()
+
+        # Extract facts in the background to improve response time
+        background_tasks.add_task(extract_facts_from_state, result)
 
         return {
             "response": response_text,
@@ -270,8 +275,17 @@ def get_chat_history(user_id: int, db: Session = Depends(get_db)):
 def clear_chat_history(user_id: int, db: Session = Depends(get_db)):
     """Clear chat messages history and session state."""
     db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete()
+    db.query(TemporaryPreference).filter(TemporaryPreference.user_id == user_id).delete()
     db.commit()
-    return {"status": "success", "message": "Chat history cleared."}
+    return {"status": "success", "message": "Chat history and temporary preferences cleared."}
+
+
+@app.delete("/api/users/{user_id}/temporary-preferences")
+def clear_temporary_preferences(user_id: int, db: Session = Depends(get_db)):
+    """Clear AI short term memory temporary preferences."""
+    db.query(TemporaryPreference).filter(TemporaryPreference.user_id == user_id).delete()
+    db.commit()
+    return {"status": "success", "message": "AI short term memory cleared."}
 
 
 @app.delete("/api/users/{user_id}/facts")
@@ -280,3 +294,5 @@ def clear_user_facts(user_id: int, db: Session = Depends(get_db)):
     db.query(UserFact).filter(UserFact.user_id == user_id).delete()
     db.commit()
     return {"status": "success", "message": "AI long term memory cleared."}
+
+# Trigger reload for LangSmith and search tool fixes.

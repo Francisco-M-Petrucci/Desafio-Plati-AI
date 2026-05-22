@@ -16,6 +16,7 @@ class User(Base):
     restrictions = relationship("DietaryRestriction", back_populates="user", cascade="all, delete-orphan")
     facts = relationship("UserFact", back_populates="user", cascade="all, delete-orphan")
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
+    temporary_preferences = relationship("TemporaryPreference", back_populates="user", cascade="all, delete-orphan")
 
 
 class Appliance(Base):
@@ -59,6 +60,17 @@ class UserFact(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="facts")
+
+
+class TemporaryPreference(Base):
+    __tablename__ = "temporary_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    preference = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="temporary_preferences")
 
 
 class ChatMessage(Base):

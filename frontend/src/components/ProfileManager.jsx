@@ -116,6 +116,19 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     }
   };
 
+  const handleClearShortTermMemory = async () => {
+    if (!window.confirm("Are you sure you want to clear AI's short-term memory (temporary preferences)?")) return;
+    setIsUpdating(true);
+    try {
+      await axios.delete(`${API_BASE}/api/users/${user.user_id}/temporary-preferences`);
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="dashboard-grid">
       {/* Sidebar: Configuration (Appliances, Restrictions, AI memory) */}
@@ -182,7 +195,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           </div>
         </div>
 
-        {/* AI Memory Panel */}
+        {/* AI Long-Term Memory Panel */}
         <div className="card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -210,6 +223,40 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
                 <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', background: 'rgba(255, 255, 255, 0.01)', padding: '0.4rem 0.6rem', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}>
                   <Sparkles size={12} style={{ color: 'hsl(var(--primary))', marginTop: '0.15rem', flexShrink: 0 }} />
                   <span>{fact}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* AI Short-Term Memory Panel */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Sparkles size={16} style={{ color: 'hsl(var(--primary))' }} />
+              AI Short-Term Memory (Temporary)
+            </h2>
+            {profile.temporary_preferences && profile.temporary_preferences.length > 0 && (
+              <button 
+                onClick={handleClearShortTermMemory}
+                style={{ fontSize: '0.75rem', background: 'transparent', color: 'hsl(var(--danger))', textDecoration: 'underline' }}
+                disabled={isUpdating}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          
+          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }} className="custom-scroll">
+            {!profile.temporary_preferences || profile.temporary_preferences.length === 0 ? (
+              <div className="empty-state" style={{ padding: '0.5rem' }}>
+                No temporary preferences saved yet (e.g. "today", "tonight").
+              </div>
+            ) : (
+              profile.temporary_preferences.map((pref, index) => (
+                <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', background: 'rgba(255, 255, 255, 0.01)', padding: '0.4rem 0.6rem', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}>
+                  <Sparkles size={12} style={{ color: 'hsl(var(--secondary))', marginTop: '0.15rem', flexShrink: 0 }} />
+                  <span>{pref}</span>
                 </div>
               ))
             )}

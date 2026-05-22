@@ -4,6 +4,17 @@ import { Send, Upload, FileImage, Sparkles, Trash2, ArrowRight, Loader2, Plus, X
 
 const API_BASE = 'http://localhost:8000';
 
+const renderMessageContent = (text) => {
+  if (!text) return "";
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+};
+
 function ChatInterface({ user, profile, onProfileUpdate }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -228,7 +239,7 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
                   key={index} 
                   className={`message-bubble ${msg.role === 'user' ? 'message-user' : 'message-ai'}`}
                 >
-                  {msg.content}
+                  {renderMessageContent(msg.content)}
                 </div>
               );
             })
