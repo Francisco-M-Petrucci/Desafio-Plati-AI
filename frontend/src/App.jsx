@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ChefHat, MessageSquare, LayoutDashboard, Utensils, LogOut } from 'lucide-react';
 import Login from './pages/Login';
+import RegisterWizard from './pages/RegisterWizard';
 import ChatInterface from './components/ChatInterface';
 import ProfileManager from './components/ProfileManager';
 import RecipeBrowser from './components/RecipeBrowser';
@@ -10,6 +11,7 @@ const API_BASE = 'http://localhost:8000';
 
 function App() {
   const [user, setUser] = useState(null);
+  const [isRegistering, setIsRegistering] = useState(false);
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'dashboard' | 'recipes'
   const [profile, setProfile] = useState({
     ingredients: [],
@@ -63,10 +65,27 @@ function App() {
   };
 
   if (!user) {
-    return <Login onLoginSuccess={(u) => {
-      localStorage.setItem('recipe_user', JSON.stringify(u));
-      setUser(u);
-    }} />;
+    if (isRegistering) {
+      return (
+        <RegisterWizard 
+          onRegisterSuccess={(u) => {
+            localStorage.setItem('recipe_user', JSON.stringify(u));
+            setUser(u);
+            setIsRegistering(false);
+          }}
+          onCancel={() => setIsRegistering(false)}
+        />
+      );
+    }
+    return (
+      <Login 
+        onLoginSuccess={(u) => {
+          localStorage.setItem('recipe_user', JSON.stringify(u));
+          setUser(u);
+        }} 
+        onRegisterToggle={() => setIsRegistering(true)}
+      />
+    );
   }
 
   return (
