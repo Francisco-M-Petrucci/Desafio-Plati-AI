@@ -8,13 +8,12 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 
 from app.agent.state import AgentState
-from app.agent.prompts import SYSTEM_PROMPT, FACT_EXTRACTION_PROMPT
+from app.agent.prompts import SYSTEM_PROMPT_WITH_SEARCH, SYSTEM_PROMPT_WITHOUT_SEARCH, FACT_EXTRACTION_PROMPT
 from app.agent.tools import (
     get_user_profile_data,
     update_ingredients_in_db,
     add_user_fact_to_db,
     add_user_temporary_preference_to_db,
-    search_recipes,
     get_filtered_recipe_ids,
     format_recipe_results,
     get_recipe_details_by_id,
@@ -65,21 +64,18 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
 
 # 2. Define LangChain Structured Tools for LLM Tool Binding
 @tool
-def search_recipes_tool(
+def search_recipes(
     query: str,
     include_steps: bool = False,
     culture: Optional[str] = None,
     season: Optional[str] = None
 ) -> str:
     """
-    Search the Recipe knowledge base for recipes that match the user's specific cuisine or ingredient preferences.
-    DO NOT call this tool under any circumstances if the user has not yet specified a cuisine, ingredient, or recipe name they want.
-    All results are already pre-filtered for appliance compatibility and dietary restrictions — you do NOT need to check those.
-    Parameters:
-    - query: A specific search term representing the user's cuisine or ingredient preference (e.g., 'pasta', 'tomato', 'chicken'). CRITICAL: Never pass an empty string or generic words like 'recipe'. If the user has not specified any preference yet, DO NOT call this tool.
-    - include_steps: Set to True only if the user explicitly requested detailed cooking instructions/steps for a dish. Defaults to False to save context.
-    - culture: Optional cuisine filter (e.g. 'Mexican', 'Indian', 'Italian'). Only pass this if the user explicitly mentioned a cuisine preference. Do NOT pass 'null' or 'None'.
-    - season: Optional season filter (e.g. 'Spring', 'Summer', 'Winter'). Do NOT pass 'null' or 'None'.
+    Search recipes by cuisine or ingredient preference. Results are pre-filtered for dietary/appliance compatibility.
+    - query: specific cuisine or ingredient term (e.g., 'pasta', 'chicken', 'Mexican')
+    - include_steps: True only if user asked for cooking steps (default False)
+    - culture: cuisine filter if user specified one (e.g. 'Italian')
+    - season: seasonal filter if applicable (e.g. 'Summer')
     """
     # This function body is not called directly during graph execution.
     # The tools_runner_node handles actual execution with pre-filtered IDs.
@@ -108,8 +104,7 @@ def update_inventory_tool(action: str, items: List[InventoryItem]) -> str:
 @tool
 def get_recipe_details_tool(recipe_id: int) -> str:
     """
-    Retrieve the full ingredients list and cooking steps for a recipe by its database ID.
-    Call this tool ONLY when the user explicitly asks for the detailed instructions or steps for a recipe.
+    Get full ingredients and cooking steps for a recipe by its ID.
     """
     return "Tool executed by runner."
 
@@ -137,28 +132,49 @@ def pre_filter_node(state: AgentState) -> Dict[str, Any]:
     return {"compatible_recipe_ids": compatible_ids}
 
 
+# Module-level cache for known food/cuisine terms
+_known_food_terms = None
+
+def _get_known_food_terms() -> set:
+    """Build a set of food-related terms from the recipe DB cuisines + curated keywords."""
+    global _known_food_terms
+    if _known_food_terms is not None:
+        return _known_food_terms
+
+    # Data-driven: extract cuisine types from actual recipe data
+    cuisines = set()
+    try:
+        for r in recipe_db.get_all_recipe_metadata():
+            ct = r.get("cuisine_type", "").lower().strip()
+            if ct:
+                cuisines.add(ct)
+    except Exception:
+        pass
+
+    # Curated: common food categories and ingredients users might mention
+    food_keywords = {
+        "pasta", "chicken", "beef", "pork", "fish", "salmon", "shrimp", "prawn",
+        "rice", "noodle", "noodles", "soup", "salad", "steak", "curry", "stew",
+        "tacos", "taco", "pizza", "burger", "sushi", "tofu", "seafood",
+        "chocolate", "cake", "pie", "bread", "sandwich", "wrap",
+        "spicy", "grilled", "baked", "fried", "roasted", "braised",
+        "tomato", "mushroom", "potato", "cheese", "egg", "eggs",
+        "vegan", "vegetarian", "dessert", "appetizer", "breakfast",
+    }
+
+    _known_food_terms = cuisines | food_keywords
+    return _known_food_terms
+
+
 def agent_node(state: AgentState) -> Dict[str, Any]:
     """Executes the main LLM agent model with tool binding."""
     llm = get_llm()
     
-    # Format the profile variables for the system prompt
-    p = state["user_profile"]
-    facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
-    temp_prefs_str = "\n".join(f"- {f}" for f in p.get("temporary_preferences", [])) if p.get("temporary_preferences") else "None"
-    ingredients_str = ", ".join(i["name"] for i in p["ingredients"]) if p["ingredients"] else "Empty"
-
-    sys_message = SystemMessage(
-        content=SYSTEM_PROMPT.format(
-            username=state["user_name"],
-            facts=facts_str,
-            temporary_preferences=temp_prefs_str,
-            ingredients=ingredients_str
-        )
-    )
-
     # Determine which tools to bind dynamically
-    base_tools = [update_inventory_tool, get_recipe_details_tool]
-    bind_search = True
+    tools = []
+    bind_search = False
+    bind_inventory = False
+    bind_details = False
 
     # Find the latest user message
     latest_user_msg = ""
@@ -168,63 +184,144 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             break
 
     if latest_user_msg:
-        # Check if the assistant has already asked the preferences question in the history
-        has_asked_question = False
-        for msg in state["messages"]:
-            if isinstance(msg, AIMessage) and "do you have a cuisine you feel like having today" in msg.content.lower():
-                has_asked_question = True
+        import re
+        latest_user_msg_lower = latest_user_msg.lower()
+        words = set(re.findall(r'\b[a-z]{3,}\b', latest_user_msg_lower))
+        
+        # 1. Check Food Preference / Search Intent (robust plural/substring matching)
+        known_terms = _get_known_food_terms()
+        has_food_preference = False
+        for term in known_terms:
+            pattern = r'\b' + re.escape(term) + r'(s|es)?\b'
+            if re.search(pattern, latest_user_msg_lower):
+                has_food_preference = True
                 break
+        if has_food_preference:
+            bind_search = True
+            
+        # 2. Check Inventory Action Intent
+        inventory_keywords = {
+            "add", "remove", "update", "bought", "acquired", "used", "cooked", 
+            "purchased", "ate", "inventory", "groceries", "grocery", "shop", "shopped"
+        }
+        if bool(words & inventory_keywords):
+            bind_inventory = True
+            
+        # 3. Check Recipe Details Request Intent
+        details_keywords = {"step", "steps", "detail", "details", "instruction", "instructions", "how to"}
+        if any(k in latest_user_msg_lower for k in details_keywords) or "recipe id" in latest_user_msg_lower:
+            bind_details = True
 
-        # If the question wasn't asked yet, check if they specified any preference
-        if not has_asked_question:
-            import re
-            text_lower = latest_user_msg.lower()
-            generic_words = {
-                "recipe", "recipes", "idea", "ideas", "suggestion", "suggestions", "something", "anything", "cook", "make", 
-                "prepare", "eat", "food", "dinner", "lunch", "breakfast", "meal", "meals", "today", "tonight", "now",
-                "ingredients", "ingredient", "inventory", "have", "stock", "fridge", "kitchen", "please", "can", "you", "i", "want", 
-                "recommend", "suggest", "give", "show", "find", "me", "what", "should", "could", "would", "to", "for", "with",
-                "hello", "hi", "hey", "assistant", "some", "any", "feel", "like", "having", "cuisine", "cuisines", "type",
-                "types", "dish", "dishes", "menu", "options", "option", "list", "get", "got", "about", "a", "an", "the",
-                "of", "in", "on", "at", "by", "from", "here", "there", "is", "are", "was", "were", "do", "does",
-                "did", "done", "doing", "has", "had", "have", "having", "go", "going", "went", "gone", "need", "needs",
-                "needed", "want", "wants", "wanted", "like", "likes", "liked", "love", "loves", "loved", "make", "makes", 
-                "making", "cook", "cooks", "cooking", "cooked", "use", "uses", "using", "used", "prepare", "prepares", 
-                "preparing", "prepared", "suggest", "suggests", "suggesting", "suggestions", "suggestion", "recommend", 
-                "recommends", "recommending", "recommendations", "recommendation", "search", "searches", "searching", 
-                "searched", "find", "finds", "finding", "show", "shows", "showing", "give", "gives", "giving", "get", "gets", 
-                "getting", "what", "who", "where", "when", "why", "how", "which", "help", "helps", "helping", "helpful",
-                "please", "thanks", "thank", "hello", "hi", "hey", "assistant", "bot", "ai", "dinner", "lunch", "breakfast", 
-                "snack", "snacks", "brunch", "today", "tonight", "now", "something", "anything", "nothing", "pantry", 
-                "cabinet", "cabinets", "refrigerator", "available", "have", "own", "got", "possess", "some", "any", "few", 
-                "many", "all", "every", "each", "feel", "like", "having", "cuisine", "type", "types", "category", "categories", 
-                "option", "options", "choice", "choices", "list", "lists", "listing", "listed", "about", "for", "with", 
-                "without", "from", "into", "onto", "i", "me", "my", "myself", "you", "your", "yours", "yourself", "we", "us", 
-                "our", "ours", "ourselves", "he", "him", "his", "she", "her", "hers", "it", "its", "they", "them", "their",
-                "can", "could", "should", "would", "will", "shall", "may", "might", "must", "be", "been", "being", "am", 
-                "is", "are", "was", "were", "and", "or", "but", "so", "because", "if", "here", "there"
-            }
-            # Words of length >= 3
-            words = re.findall(r'\b[a-z]{3,}\b', text_lower)
-            has_pref = any(word not in generic_words for word in words)
-
-            # If there is no specific preference in the query, do not bind search tool
-            if not has_pref:
-                bind_search = False
-                print("Dynamic Tool Binding: Excluded search_recipes_tool (general query, no preference yet)")
-
+    # Assemble tools list
     if bind_search:
-        tools = [search_recipes_tool] + base_tools
-    else:
-        tools = base_tools
+        tools.append(search_recipes)
+    if bind_inventory:
+        tools.append(update_inventory_tool)
+    if bind_details:
+        tools.append(get_recipe_details_tool)
 
-    llm_with_tools = llm.bind_tools(tools)
+    # Format the profile variables for the system prompt
+    p = state["user_profile"]
+    facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
+    temp_prefs_str = "\n".join(f"- {f}" for f in p.get("temporary_preferences", [])) if p.get("temporary_preferences") else "None"
+    ingredients_str = ", ".join(i["name"] for i in p["ingredients"]) if p["ingredients"] else "Empty"
+
+    prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
+    sys_message = SystemMessage(
+        content=prompt_template.format(
+            username=state["user_name"],
+            facts=facts_str,
+            temporary_preferences=temp_prefs_str,
+            ingredients=ingredients_str
+        )
+    )
+
+    if tools:
+        llm_with_tools = llm.bind_tools(tools)
+    else:
+        llm_with_tools = llm
     
     # Run the LLM on the chat history (System message + conversation messages)
     history = [sys_message] + state["messages"]
     response = llm_with_tools.invoke(history)
-    
     return {"messages": [response]}
+
+
+def format_conversational_inventory_update(username: str, action: str, items: Any) -> str:
+    # Normalize input types (sometimes the LLM passes stringified JSON arrays or single dictionaries)
+    if isinstance(items, str):
+        try:
+            import json
+            items = json.loads(items)
+        except Exception:
+            pass
+
+    if isinstance(items, dict):
+        items = [items]
+    elif not isinstance(items, list):
+        items = []
+
+    parts = []
+    for item in items:
+        # Handle Pydantic models or standard dictionaries
+        if hasattr(item, "model_dump"):
+            item_dict = item.model_dump()
+        elif hasattr(item, "dict"):
+            item_dict = item.dict()
+        elif isinstance(item, dict):
+            item_dict = item
+        else:
+            try:
+                item_dict = dict(item)
+            except Exception:
+                item_dict = {}
+
+        name = item_dict.get("name", "").strip()
+        qty = item_dict.get("quantity", 1.0)
+        qty_str = f"{int(qty)}" if qty == int(qty) else f"{qty}"
+        unit = item_dict.get("unit", "unit").strip()
+        if unit == "unit":
+            parts.append(f"{qty_str}x {name.capitalize()}")
+        else:
+            parts.append(f"{qty_str} {unit} of {name.capitalize()}")
+            
+    items_str = ", ".join(parts)
+    if action == "add":
+        return f"Ok {username}, I have updated your inventory with {items_str}."
+    else:
+        return f"Ok {username}, I have removed {items_str} from your inventory."
+
+
+def format_conversational_recipe_details(username: str, recipe: Dict[str, Any], user_ingredients: List[Dict[str, Any]]) -> str:
+    recipe_name = recipe.get("name", "recipe").title()
+    cook_time = recipe.get("minutes", 0)
+    
+    user_ing_names = {i['name'].lower().strip() for i in user_ingredients}
+    have = []
+    missing = []
+    for ing in recipe.get('ingredients', []):
+        ing_lower = ing.lower().strip()
+        found = False
+        for user_ing in user_ing_names:
+            if user_ing in ing_lower or ing_lower in user_ing:
+                found = True
+                break
+        if found:
+            have.append(ing)
+        else:
+            missing.append(ing)
+            
+    have_str = ", ".join(have) if have else "None"
+    missing_str = ", ".join(missing) if missing else "None"
+    steps_str = "\n".join(f"{i+1}. {step}" for i, step in enumerate(recipe.get('steps', [])))
+    
+    msg = (
+        f"Ok {username}, here are the details for **{recipe_name}** ({cook_time} mins cook time):\n\n"
+        f"**Ingredients you already have:**\n{have_str}\n\n"
+        f"**Missing ingredients you will need:**\n{missing_str}\n\n"
+        f"**Cooking Steps:**\n{steps_str}"
+    )
+    return msg
 
 
 def tools_runner_node(state: AgentState) -> Dict[str, Any]:
@@ -240,12 +337,17 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
     user_id = state["user_id"]
     compatible_ids = set(state.get("compatible_recipe_ids", []))
 
+    # Determine if we can short-circuit this turn
+    short_circuit_replies = []
+    can_short_circuit = True
+
     for tool_call in last_msg.tool_calls:
         name = tool_call["name"]
         args = tool_call["args"]
         call_id = tool_call["id"]
 
-        if name == "search_recipes_tool":
+        if name == "search_recipes":
+            can_short_circuit = False
             query = args.get("query", "")
             culture = args.get("culture")
             season = args.get("season")
@@ -263,7 +365,7 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             if season in (None, "null", "None", "NoneType", ""):
                 season = None
 
-            print(f"Executing search_recipes_tool: query='{query}', culture='{culture}', season='{season}' (searching within {len(compatible_ids)} compatible recipes)")
+            print(f"Executing search_recipes: query='{query}', culture='{culture}', season='{season}' (searching within {len(compatible_ids)} compatible recipes)")
 
             # Search ONLY within pre-filtered compatible recipes
             recipes_raw = recipe_db.search_recipes_filtered(
@@ -274,7 +376,6 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             )
 
             # Fallback: if no results with culture/season filter, retry without preferences
-            # This searches the SAME compatible set but without the culture/season constraint
             if not recipes_raw and (culture or season):
                 print(f"No results with culture='{culture}'/season='{season}', falling back to all compatible recipes")
                 recipes_raw = recipe_db.search_recipes_filtered(
@@ -305,6 +406,13 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
             actions.append(result_str)
 
+            conv_msg = format_conversational_inventory_update(
+                state["user_name"],
+                action,
+                items
+            )
+            short_circuit_replies.append(conv_msg)
+
         elif name == "get_recipe_details_tool":
             recipe_id = args.get("recipe_id")
             if recipe_id is not None:
@@ -318,6 +426,34 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
             actions.append(f"Retrieved details for recipe ID: {recipe_id}")
+
+            recipe = recipe_db.get_recipe_by_id(recipe_id)
+            if recipe:
+                conv_msg = format_conversational_recipe_details(
+                    state["user_name"],
+                    recipe,
+                    state["user_profile"]["ingredients"]
+                )
+            else:
+                conv_msg = f"Recipe with ID {recipe_id} not found."
+            short_circuit_replies.append(conv_msg)
+
+        else:
+            # Handle unrecognized/hallucinated tools to avoid premature END
+            print(f"Warning: Model called unrecognized tool '{name}'")
+            new_messages.append(
+                ToolMessage(
+                    content=f"Error: Tool '{name}' is not recognized or not available in this turn. "
+                            f"If you wanted to suggest recipes, ask the user for their preference (cuisine or ingredient) first.",
+                    tool_call_id=call_id
+                )
+            )
+            can_short_circuit = False
+
+    # If all executed tools were short-circuitable, append conversational AIMessage
+    if can_short_circuit and short_circuit_replies:
+        combined_reply = "\n\n".join(short_circuit_replies)
+        new_messages.append(AIMessage(content=combined_reply))
 
     return {
         "messages": new_messages,
@@ -401,6 +537,15 @@ def route_agent(state: AgentState) -> str:
     return END
 
 
+def route_tools(state: AgentState) -> str:
+    """Decides if the graph should return to the agent or end (short-circuiting)."""
+    # If the last message is an AIMessage, it means the tools runner node short-circuited 
+    # and produced the final conversational response directly.
+    if isinstance(state["messages"][-1], AIMessage):
+        return END
+    return "agent"
+
+
 # 5. Build state graph
 workflow = StateGraph(AgentState)
 
@@ -423,7 +568,14 @@ workflow.add_conditional_edges(
     }
 )
 
-workflow.add_edge("tools", "agent")
+workflow.add_conditional_edges(
+    "tools",
+    route_tools,
+    {
+        "agent": "agent",
+        END: END
+    }
+)
 
 # Compile
 agent_graph = workflow.compile()

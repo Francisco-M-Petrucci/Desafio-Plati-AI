@@ -1,11 +1,82 @@
 import os
+import shutil
+from sqlalchemy import text
 from app.database import engine, Base, SessionLocal
-from app.models import User, Appliance, Ingredient, DietaryRestriction, UserFact
+from app.models import User, Appliance, Ingredient, DietaryRestriction, UserFact, InitialSearchRecipe
 from app.recipes_vector_db import RecipeVectorDB
 
+def populate_initial_search_recipes(db, user, appliances, restrictions, ingredients):
+    # Check if they already have initial recipes populated
+    has_initial = db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == user.id).first()
+    if not has_initial:
+        print(f"Calculating initial recipe matches for {user.username}...")
+        from app.agent.tools import get_filtered_recipe_ids
+        
+        user_profile = {
+            "appliances": appliances,
+            "restrictions": restrictions,
+            "ingredients": [{"name": ing} for ing in ingredients]
+        }
+        
+        # Filter recipes by appliance & restriction
+        compatible_ids = get_filtered_recipe_ids(user_profile)
+        print(f"User {user.username} compatible IDs: {compatible_ids}")
+        
+        # Rank by ingredients matching
+        query = ", ".join(ingredients)
+        vector_db = RecipeVectorDB()
+        recipes_raw = vector_db.search_recipes_filtered(
+            query=query,
+            recipe_ids=set(compatible_ids),
+            limit=5
+        )
+        
+        # Fallback if < 5
+        if len(recipes_raw) < 5:
+            all_meta = vector_db.get_all_recipe_metadata()
+            compatible_recipes = [r for r in all_meta if r["id"] in compatible_ids]
+            existing_ids = {r["id"] for r in recipes_raw}
+            for r in compatible_recipes:
+                if len(recipes_raw) >= 5:
+                    break
+                if r["id"] not in existing_ids:
+                    recipe_full = vector_db.get_recipe_by_id(r["id"])
+                    if recipe_full:
+                        recipes_raw.append(recipe_full)
+                        existing_ids.add(r["id"])
+                        
+        for r in recipes_raw[:5]:
+            db.add(InitialSearchRecipe(user_id=user.id, recipe_id=r["id"]))
+        db.commit()
+        print(f"Successfully seeded {len(recipes_raw[:5])} initial recipes for {user.username}.")
+
 def seed_database():
+    # 1. Reset Vector DB persist directory BEFORE instantiating any database connection
+    print("Resetting Vector DB persist directory to apply dietary tags updates...")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    chroma_dir = os.path.join(base_dir, "data", "chroma_db")
+    if os.path.exists(chroma_dir):
+        try:
+            shutil.rmtree(chroma_dir)
+            print("Deleted old Chroma database directory successfully.")
+        except Exception as e:
+            print(f"Could not delete Chroma directory: {e}")
+
+    # 2. Seed Vector DB first so that the recipe database matches immediately when ORM matchmaking runs
+    print("Seeding Vector DB...")
+    vector_db = RecipeVectorDB()
+    seed_file_path = os.path.join(base_dir, "data", "recipes_seed.json")
+    vector_db.seed_recipes(seed_file_path)
+
     print("Creating SQLite database tables...")
     Base.metadata.create_all(bind=engine)
+    
+    # Ensure first_name column exists
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN first_name VARCHAR;"))
+    except Exception as e:
+        print(f"Migration error during seed execution: {e}")
     
     db = SessionLocal()
     
@@ -13,7 +84,7 @@ def seed_database():
     alice = db.query(User).filter(User.username == "alice").first()
     if not alice:
         print("Seeding user Alice...")
-        alice = User(username="alice", password="password123")
+        alice = User(username="alice", password="password123", first_name="Alice")
         db.add(alice)
         db.commit()
         db.refresh(alice)
@@ -50,13 +121,27 @@ def seed_database():
         db.commit()
         print("Alice seeded successfully.")
     else:
-        print("User Alice already exists. Skipping user seed.")
+        print("User Alice already exists. Ensuring first_name is set.")
+        alice.first_name = "Alice"
+        db.commit()
+
+    # Clear existing initial matches for Alice to rebuild
+    db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == alice.id).delete()
+    db.commit()
+
+    # Populate Alice initial recipes
+    populate_initial_search_recipes(
+        db, alice,
+        appliances=["airfryer", "blender/mixer"],
+        restrictions=["gluten-free", "low-carb"],
+        ingredients=["chicken wings", "olive oil", "garlic powder", "parmesan cheese", "salt", "black pepper", "parsley"]
+    )
 
     # 2. Create User B (Bob)
     bob = db.query(User).filter(User.username == "bob").first()
     if not bob:
         print("Seeding user Bob...")
-        bob = User(username="bob", password="password123")
+        bob = User(username="bob", password="password123", first_name="Bob")
         db.add(bob)
         db.commit()
         db.refresh(bob)
@@ -92,17 +177,43 @@ def seed_database():
         db.commit()
         print("Bob seeded successfully.")
     else:
-        print("User Bob already exists. Skipping user seed.")
+        print("User Bob already exists. Ensuring first_name is set.")
+        bob.first_name = "Bob"
+        db.commit()
+
+    # Clear existing initial matches for Bob to rebuild
+    db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == bob.id).delete()
+    db.commit()
+
+    # Populate Bob initial recipes
+    populate_initial_search_recipes(
+        db, bob,
+        appliances=["oven", "stove", "blender/mixer"],
+        restrictions=["vegetarian"],
+        ingredients=["pizza dough", "canned san marzano tomatoes", "fresh mozzarella cheese", "fresh basil leaves", "extra virgin olive oil", "salt"]
+    )
+
+    # 3. Handle User C (Carol)
+    carol = db.query(User).filter(User.username == "carol").first()
+    if carol:
+        print("User Carol exists. Ensuring first_name is set.")
+        carol.first_name = "Carol"
+        db.commit()
+
+        # Clear existing initial matches for Carol to rebuild
+        db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == carol.id).delete()
+        db.commit()
+
+        # Populate Carol initial recipes
+        populate_initial_search_recipes(
+            db, carol,
+            appliances=[a.name for a in carol.appliances],
+            restrictions=[r.restriction for r in carol.restrictions],
+            ingredients=[i.name for i in carol.ingredients]
+        )
         
     db.close()
-
-    # 3. Seed Vector DB
-    print("Seeding Vector DB...")
-    vector_db = RecipeVectorDB()
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    seed_file_path = os.path.join(base_dir, "data", "recipes_seed.json")
-    vector_db.seed_recipes(seed_file_path)
-    print("Database seeding completed!")
+    print("Database seeding completed successfully!")
 
 if __name__ == "__main__":
     seed_database()

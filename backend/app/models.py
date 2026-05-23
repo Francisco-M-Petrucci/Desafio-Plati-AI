@@ -9,6 +9,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     password = Column(String, nullable=False)  # Stored plain for simplicity in local demo
+    first_name = Column(String, nullable=True) # Added for registration onboarding
 
     # Relationships
     appliances = relationship("Appliance", back_populates="user", cascade="all, delete-orphan")
@@ -17,6 +18,7 @@ class User(Base):
     facts = relationship("UserFact", back_populates="user", cascade="all, delete-orphan")
     chat_messages = relationship("ChatMessage", back_populates="user", cascade="all, delete-orphan")
     temporary_preferences = relationship("TemporaryPreference", back_populates="user", cascade="all, delete-orphan")
+    initial_search_recipes = relationship("InitialSearchRecipe", back_populates="user", cascade="all, delete-orphan")
 
 
 class Appliance(Base):
@@ -83,3 +85,13 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="chat_messages")
+
+
+class InitialSearchRecipe(Base):
+    __tablename__ = "initial_search_recipes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    recipe_id = Column(Integer, nullable=False)
+
+    user = relationship("User", back_populates="initial_search_recipes")

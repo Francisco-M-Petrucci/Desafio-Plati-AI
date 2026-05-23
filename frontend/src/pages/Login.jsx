@@ -4,7 +4,7 @@ import { ChefHat, ArrowRight, Sparkles } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
 
-function Login({ onLoginSuccess }) {
+function Login({ onLoginSuccess, onRegisterToggle }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('password123'); // Default password for easy demo
   const [error, setError] = useState('');
@@ -80,16 +80,40 @@ function Login({ onLoginSuccess }) {
             />
           </div>
 
+          <div className="form-group" style={{ marginTop: '1rem' }}>
+            <label className="form-label" htmlFor="password">Password</label>
+            <input 
+              id="password"
+              type="password" 
+              className="form-input" 
+              placeholder="••••••••" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
+
           <button 
             type="submit" 
             className="btn-primary" 
-            style={{ width: '100%', justifyContent: 'center', padding: '0.8rem', borderRadius: '10px', fontSize: '1rem' }}
+            style={{ width: '100%', justifyContent: 'center', padding: '0.8rem', borderRadius: '10px', fontSize: '1rem', marginTop: '1rem' }}
             disabled={isLoading}
           >
             <span>{isLoading ? 'Connecting...' : 'Enter Kitchen'}</span>
             <ArrowRight size={18} />
           </button>
         </form>
+
+        <div style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>
+          Don't have an account?{' '}
+          <button 
+            type="button" 
+            onClick={onRegisterToggle} 
+            style={{ background: 'transparent', border: 'none', color: 'hsl(var(--primary))', fontWeight: '600', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+          >
+            Create Account
+          </button>
+        </div>
 
         <div className="login-presets">
           <div className="presets-title">

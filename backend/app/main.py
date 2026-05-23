@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -9,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.database import get_db, engine, Base
-from app.models import User, Appliance, Ingredient, DietaryRestriction, ChatMessage, UserFact, TemporaryPreference
+from app.models import User, Appliance, Ingredient, DietaryRestriction, ChatMessage, UserFact, TemporaryPreference, InitialSearchRecipe
 from app.agent.graph import agent_graph, extract_facts_from_state
 from app.agent.tools import get_user_profile_data
 from app.ocr import parse_receipt_image
@@ -17,6 +18,13 @@ from app.recipes_vector_db import RecipeVectorDB
 
 # Initialize tables
 Base.metadata.create_all(bind=engine)
+
+# Migration step: ensure first_name exists in users table
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN first_name VARCHAR;"))
+except Exception as e:
+    print(f"Migration error during main startup: {e}")
 
 app = FastAPI(title="Recipe Companion API")
 
@@ -55,6 +63,14 @@ class IngredientUpdate(BaseModel):
 class RestrictionUpdate(BaseModel):
     restrictions: List[str]
 
+class RegisterRequest(BaseModel):
+    first_name: str
+    username: str
+    password: str
+    appliances: List[str]
+    restrictions: List[str]
+    ingredients: List[IngredientItem]
+
 
 # --- API Routes ---
 
@@ -65,21 +81,129 @@ def read_root():
 
 @app.post("/api/auth/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
-    """Simple login that creates the user if they don't exist (for easier local testing)."""
+    """Login and verify username and password."""
     username = req.username.strip().lower()
     if not username:
         raise HTTPException(status_code=400, detail="Username cannot be empty")
         
     user = db.query(User).filter(User.username == username).first()
     if not user:
-        # Auto-register user for ease of local demo
-        user = User(username=username, password=req.password)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        print(f"Auto-registered user: {username}")
+        raise HTTPException(status_code=401, detail="Account not found. Please register first.")
+        
+    if user.password != req.password:
+        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
         
     return {"user_id": user.id, "username": user.username}
+
+
+@app.post("/api/auth/register")
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user, store kitchen profile, and run initial 5 recipe matches."""
+    username = req.username.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username cannot be empty")
+        
+    existing = db.query(User).filter(User.username == username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already taken")
+        
+    # Create new User
+    user = User(
+        first_name=req.first_name.strip(),
+        username=username,
+        password=req.password
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    # Add appliances
+    for app_name in req.appliances:
+        if app_name.strip():
+            db.add(Appliance(user_id=user.id, name=app_name.strip().lower()))
+            
+    # Add restrictions
+    for rest in req.restrictions:
+        if rest.strip():
+            db.add(DietaryRestriction(user_id=user.id, restriction=rest.strip().lower()))
+            
+    # Add ingredients
+    for ing in req.ingredients:
+        name = ing.name.strip().lower()
+        if name:
+            db.add(Ingredient(
+                user_id=user.id,
+                name=name,
+                quantity=ing.quantity,
+                unit=ing.unit.strip().lower()
+            ))
+            
+    db.commit()
+    
+    # Run initial search to find 5 recipes
+    try:
+        from app.agent.tools import get_filtered_recipe_ids
+        
+        user_profile = {
+            "appliances": [a.strip().lower() for a in req.appliances if a.strip()],
+            "restrictions": [r.strip().lower() for r in req.restrictions if r.strip()],
+            "ingredients": [{"name": i.name.strip().lower()} for i in req.ingredients if i.name.strip()]
+        }
+        
+        # 1. Filter by appliances and dietary restrictions
+        compatible_ids = get_filtered_recipe_ids(user_profile)
+        
+        # 2. Search recipes matching ingredients
+        user_ing_names = [i.name.strip().lower() for i in req.ingredients if i.name.strip()]
+        query = ", ".join(user_ing_names) if user_ing_names else "recipe"
+        
+        recipes_raw = recipe_vector_db.search_recipes_filtered(
+            query=query,
+            recipe_ids=set(compatible_ids),
+            limit=5
+        )
+        
+        # If fewer than 5, fill with remaining compatible recipes
+        if len(recipes_raw) < 5:
+            all_meta = recipe_vector_db.get_all_recipe_metadata()
+            compatible_recipes = [r for r in all_meta if r["id"] in compatible_ids]
+            existing_ids = {r["id"] for r in recipes_raw}
+            for r in compatible_recipes:
+                if len(recipes_raw) >= 5:
+                    break
+                if r["id"] not in existing_ids:
+                    recipe_full = recipe_vector_db.get_recipe_by_id(r["id"])
+                    if recipe_full:
+                        recipes_raw.append(recipe_full)
+                        existing_ids.add(r["id"])
+                        
+        # Store selected 5 recipe IDs in initial_search_recipes
+        for r in recipes_raw[:5]:
+            db.add(InitialSearchRecipe(user_id=user.id, recipe_id=r["id"]))
+        db.commit()
+        
+    except Exception as e:
+        print(f"Error during registration recipe search: {e}")
+        
+    return {"user_id": user.id, "username": user.username}
+
+
+@app.get("/api/users/{user_id}/initial-search")
+def get_initial_search(user_id: int, db: Session = Depends(get_db)):
+    """Retrieve full details of the 5 recipes matched during registration."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    initial_matches = db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == user_id).all()
+    
+    recipes_list = []
+    for match in initial_matches:
+        recipe = recipe_vector_db.get_recipe_by_id(match.recipe_id)
+        if recipe:
+            recipes_list.append(recipe)
+            
+    return recipes_list
 
 
 @app.get("/api/users/{user_id}/profile")
@@ -163,20 +287,26 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depe
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 1. Load short-term history from DB (last 10 messages)
+    # 1. Load short-term history from DB (up to 15 assistant messages to select from by token budget)
     history_msgs = db.query(ChatMessage).filter(
-        ChatMessage.user_id == req.user_id
-    ).order_by(ChatMessage.created_at.asc()).all()[-10:]
+        ChatMessage.user_id == req.user_id,
+        ChatMessage.role == "assistant"
+    ).order_by(ChatMessage.created_at.desc()).limit(15).all()
 
-    # Map database messages to LangChain message formats
+    # Map database messages to LangChain message formats fitting within token budget
     from langchain_core.messages import HumanMessage, AIMessage
     from app.agent.memory import minify_assistant_message
     
+    MAX_HISTORY_TOKENS = 400
+    token_count = 0
     formatted_messages = []
     for msg in history_msgs:
-        if msg.role != "user":
-            minified_content = minify_assistant_message(msg.content)
-            formatted_messages.append(AIMessage(content=minified_content))
+        minified_content = minify_assistant_message(msg.content)
+        msg_tokens = len(minified_content) // 4  # Estimate: 4 chars ≈ 1 token
+        if token_count + msg_tokens > MAX_HISTORY_TOKENS:
+            break
+        formatted_messages.insert(0, AIMessage(content=minified_content))
+        token_count += msg_tokens
 
     # Add the current new message
     formatted_messages.append(HumanMessage(content=req.message))

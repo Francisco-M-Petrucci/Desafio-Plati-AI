@@ -9,6 +9,7 @@ const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 
 function RecipeBrowser({ user, profile }) {
   const [recipes, setRecipes] = useState([]);
+  const [initialRecipes, setInitialRecipes] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCulture, setSelectedCulture] = useState('');
   const [selectedSeason, setSelectedSeason] = useState('');
@@ -19,6 +20,12 @@ function RecipeBrowser({ user, profile }) {
   useEffect(() => {
     fetchRecipes();
   }, [search, selectedCulture, selectedSeason]);
+
+  useEffect(() => {
+    if (user?.user_id) {
+      fetchInitialRecipes();
+    }
+  }, [user]);
 
   const fetchRecipes = async () => {
     try {
@@ -32,6 +39,15 @@ function RecipeBrowser({ user, profile }) {
       setRecipes(res.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchInitialRecipes = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/users/${user.user_id}/initial-search`);
+      setInitialRecipes(res.data);
+    } catch (err) {
+      console.error("Error fetching initial recipes:", err);
     }
   };
 
@@ -120,6 +136,91 @@ function RecipeBrowser({ user, profile }) {
 
         {/* Recipes Grid */}
         <div className="custom-scroll" style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 270px)', paddingRight: '0.25rem' }}>
+          
+          {/* Onboarding Matches Section */}
+          {initialRecipes.length > 0 && !search && !selectedCulture && !selectedSeason && (
+            <div style={{ marginBottom: '2rem' }}>
+              <h3 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)', fontWeight: '700', color: 'hsl(var(--primary))', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <BookOpen size={16} />
+                <span>✨ Handcrafted Onboarding Matches</span>
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {initialRecipes.map(recipe => {
+                  const isActive = selectedRecipe?.id === recipe.id;
+                  
+                  // Calculate pantry matches
+                  const matches = recipe.ingredients.map(ing => checkIngredientMatch(ing));
+                  const matchedCount = matches.filter(m => m.matched).length;
+                  const totalCount = recipe.ingredients.length;
+                  const percent = Math.round((matchedCount / totalCount) * 100);
+
+                  return (
+                    <div 
+                      key={`init-${recipe.id}`}
+                      className="card"
+                      onClick={() => handleSelectRecipe(recipe)}
+                      style={{ 
+                        padding: '1.25rem', 
+                        cursor: 'pointer',
+                        borderColor: isActive ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.3)',
+                        background: isActive ? 'rgba(16, 185, 129, 0.06)' : 'rgba(16, 185, 129, 0.01)',
+                        boxShadow: '0 0 10px rgba(16, 185, 129, 0.02)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <h3 className="recipe-card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span>{recipe.name}</span>
+                          <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', color: '#a7f3d0' }}>Match</span>
+                        </h3>
+                        <ChevronRight size={18} style={{ color: 'hsl(var(--text-muted))', transform: isActive ? 'rotate(90deg)' : '', transition: '0.2s' }} />
+                      </div>
+
+                      <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem', lineHeight: '1.4', margin: '0.25rem 0 0.75rem 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {recipe.description}
+                      </p>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div className="recipe-tags" style={{ margin: 0 }}>
+                          {recipe.tags.slice(0, 3).map(tag => {
+                            let type = 'tag-culture';
+                            if (SEASONS.map(s=>s.toLowerCase()).includes(tag.toLowerCase())) type = 'tag-season';
+                            if (['airfryer', 'oven', 'stove', 'mixer', 'microwave', 'slow-cooker'].includes(tag.toLowerCase())) type = 'tag-appliance';
+                            if (['gluten-free', 'lactose-free', 'vegetarian', 'vegan', 'low-carb'].includes(tag.toLowerCase())) type = 'tag-restriction';
+                            return (
+                              <span key={tag} className={`tag ${type}`}>{tag}</span>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.8rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'hsl(var(--text-secondary))' }}>
+                            <Clock size={12} />
+                            <span>{recipe.minutes} mins</span>
+                          </div>
+                          <div 
+                            style={{ 
+                              padding: '0.25rem 0.5rem', 
+                              borderRadius: '6px', 
+                              background: percent === 100 ? 'rgba(16, 185, 129, 0.15)' : percent > 40 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                              color: percent === 100 ? '#a7f3d0' : percent > 40 ? '#fde68a' : '#fecdd3',
+                              fontWeight: '600'
+                            }}
+                          >
+                            {matchedCount}/{totalCount} Ingredients ({percent}%)
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ margin: '1.5rem 0 1rem 0', height: '1px', background: 'hsl(var(--border))' }}></div>
+              <h3 style={{ fontSize: '0.85rem', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.05em', color: 'hsl(var(--text-secondary))', marginBottom: '0.75rem' }}>
+                All Recipes Database
+              </h3>
+            </div>
+          )}
+
           {recipes.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
               <AlertTriangle size={32} style={{ color: 'hsl(var(--text-muted))', marginBottom: '0.5rem', display: 'inline' }} />
