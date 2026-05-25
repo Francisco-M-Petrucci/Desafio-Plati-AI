@@ -27,12 +27,37 @@ def _load_kb():
         
     # Build a flat dictionary mapping standard name and all synonyms to standard name
     _synonym_to_standard_map = {}
-    for standard_name, synonyms in _kb_data.items():
+    standard_keys = set()
+    
+    # Pass 1: Map all standard names (highest priority)
+    for standard_name in _kb_data.keys():
         standard_clean = standard_name.strip().lower()
         _synonym_to_standard_map[standard_clean] = standard_name
+        standard_keys.add(standard_clean)
+        
+    # Pass 2: Map synonyms, preventing them from overwriting standard names and alerting on collisions
+    for standard_name, synonyms in _kb_data.items():
         for syn in synonyms:
             syn_clean = syn.strip().lower()
-            if syn_clean:
+            if not syn_clean:
+                continue
+                
+            # If the synonym tries to map to a standard name, but that standard name is already defined
+            if syn_clean in standard_keys:
+                if syn_clean != standard_name.strip().lower():
+                    print(f"Warning: Synonym collision for '{syn_clean}'. "
+                          f"It is defined as a standard name '{_synonym_to_standard_map[syn_clean]}', "
+                          f"skipping mapping to synonym of '{standard_name}'.")
+                continue
+                
+            # If the synonym is already mapped to another standard name
+            if syn_clean in _synonym_to_standard_map:
+                existing_target = _synonym_to_standard_map[syn_clean]
+                if existing_target != standard_name:
+                    print(f"Warning: Synonym collision for '{syn_clean}'. "
+                          f"Already maps to standard name '{existing_target}', "
+                          f"skipping mapping to '{standard_name}'.")
+            else:
                 _synonym_to_standard_map[syn_clean] = standard_name
 
 def standardize_ingredient(raw_name: str) -> str:

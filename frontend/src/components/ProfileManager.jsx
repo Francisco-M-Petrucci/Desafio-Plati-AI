@@ -9,8 +9,6 @@ const DIETARY_OPTIONS = ['gluten-free', 'lactose-free', 'vegetarian', 'vegan', '
 
 function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
   const [newIngName, setNewIngName] = useState('');
-  const [newIngQty, setNewIngQty] = useState(1);
-  const [newIngUnit, setNewIngUnit] = useState('unit');
   
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -55,20 +53,14 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     if (!newIngName.trim()) return;
     setIsUpdating(true);
 
-    const newItem = {
-      name: newIngName.trim().lowerCase || newIngName.trim().toLowerCase(),
-      quantity: parseFloat(newIngQty) || 1.0,
-      unit: newIngUnit.trim().toLowerCase()
-    };
+    const name = newIngName.trim().toLowerCase();
 
-    // Check if ingredient exists, add to it, or append
-    const existsIndex = profile.ingredients.findIndex(i => i.name.toLowerCase() === newItem.name);
+    // Check if ingredient exists, otherwise append
     let updated;
-    if (existsIndex >= 0) {
+    if (profile.ingredients.includes(name)) {
       updated = [...profile.ingredients];
-      updated[existsIndex].quantity += newItem.quantity;
     } else {
-      updated = [...profile.ingredients, newItem];
+      updated = [...profile.ingredients, name];
     }
 
     try {
@@ -76,8 +68,6 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
         ingredients: updated
       });
       setNewIngName('');
-      setNewIngQty(1);
-      setNewIngUnit('unit');
       onProfileUpdate();
     } catch (err) {
       console.error(err);
@@ -88,7 +78,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
 
   const handleRemoveIngredient = async (ingName) => {
     setIsUpdating(true);
-    const updated = profile.ingredients.filter(i => i.name !== ingName);
+    const updated = profile.ingredients.filter(name => name !== ingName);
     try {
       await axios.post(`${API_BASE}/api/users/${user.user_id}/ingredients`, {
         ingredients: updated
@@ -100,6 +90,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
       setIsUpdating(false);
     }
   };
+
 
   const handleClearMemory = async () => {
     if (!window.confirm("Are you sure you want to clear AI's short and long-term memory about you? This deletes all extracted facts and chat history.")) return;
@@ -450,7 +441,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
         </div>
 
         {/* Add Ingredient Form */}
-        <form onSubmit={handleAddIngredient} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px auto', gap: '0.75rem', alignItems: 'end', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.01)', padding: '1rem', border: '1px dashed hsl(var(--border))', borderRadius: '10px' }}>
+        <form onSubmit={handleAddIngredient} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', alignItems: 'end', marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.01)', padding: '1rem', border: '1px dashed hsl(var(--border))', borderRadius: '10px' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Ingredient Name</label>
             <input 
@@ -459,31 +450,6 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
               placeholder="e.g. olive oil"
               value={newIngName}
               onChange={(e) => setNewIngName(e.target.value)}
-              disabled={isUpdating}
-              required
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Qty</label>
-            <input 
-              type="number" 
-              step="any"
-              min="0.01"
-              className="form-input" 
-              value={newIngQty}
-              onChange={(e) => setNewIngQty(e.target.value)}
-              disabled={isUpdating}
-              required
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Unit</label>
-            <input 
-              type="text" 
-              className="form-input" 
-              placeholder="e.g. ml, g, unit"
-              value={newIngUnit}
-              onChange={(e) => setNewIngUnit(e.target.value)}
               disabled={isUpdating}
               required
             />
@@ -506,7 +472,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
               {profile.ingredients.map(ing => (
                 <div 
-                  key={ing.name} 
+                  key={ing} 
                   style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
@@ -520,14 +486,11 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
                   className="inventory-card"
                 >
                   <div>
-                    <div style={{ fontWeight: '600', textTransform: 'capitalize' }}>{ing.name}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '0.15rem' }}>
-                      Quantity: <strong style={{ color: 'hsl(var(--primary))' }}>{ing.quantity}</strong> {ing.unit}
-                    </div>
+                    <div style={{ fontWeight: '600', textTransform: 'capitalize' }}>{ing}</div>
                   </div>
                   <button 
                     type="button" 
-                    onClick={() => handleRemoveIngredient(ing.name)}
+                    onClick={() => handleRemoveIngredient(ing)}
                     style={{ background: 'transparent', color: 'hsl(var(--text-muted))', padding: '0.25rem' }}
                     className="delete-ing-btn"
                     disabled={isUpdating}
@@ -539,6 +502,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

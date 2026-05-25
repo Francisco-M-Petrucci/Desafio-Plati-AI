@@ -111,28 +111,32 @@ def search_recipes(
     return "Tool executed by runner."
 
 
-class InventoryItem(BaseModel):
-    name: str = Field(description="The lowercased name of the ingredient (e.g., 'milk', 'tomato')")
-    quantity: float = Field(default=1.0, description="The quantity of the ingredient acquired or used")
-    unit: str = Field(default="unit", description="The unit of measurement (e.g., 'kg', 'g', 'unit')")
-
 @tool
-def update_inventory_tool(action: str, items: List[InventoryItem]) -> str:
+def update_inventory_tool(action: str, items: List[str]) -> str:
     """
     Updates the user's kitchen ingredients inventory.
     Parameters:
-    - action: 'add' (if user acquired/bought ingredients) or 'remove' (if user used/cooked ingredients)
-    - items: a list of items, each containing 'name' (str), 'quantity' (float), and optionally 'unit' (str, e.g. 'kg', 'g', 'unit')
+    - action: 'add' (if user acquired/bought ingredients) or 'remove' (if user explicitly ran out of / finished / no longer has ingredients)
+    - items: a list of ingredient names (e.g. ['tomato', 'milk'])
     """
     # The actual database update is executed in the tool runner node which has the user_id.
     # This tool definition is mostly for schema binding.
     return "Inventory updated successfully."
 
 
+
 @tool
 def get_recipe_details_tool(recipe_id: int) -> str:
     """
     Get full ingredients and cooking steps for a recipe by its ID.
+    """
+    return "Tool executed by runner."
+
+
+@tool
+def get_inventory_tool() -> str:
+    """
+    Retrieve the complete list of ingredients in the user's kitchen inventory.
     """
     return "Tool executed by runner."
 
@@ -302,7 +306,8 @@ def check_recommendation_desire(text: str) -> bool:
 def check_inventory_intent(messages: List[Any]) -> bool:
     keywords = {
         "bought", "got", "acquired", "used", "cooked", "remove", "add", "inventory", 
-        "stock", "pantry", "fridge", "kitchen", "have", "purchased", "used up", "consume"
+        "stock", "pantry", "fridge", "kitchen", "have", "purchased", "used up", "consume",
+        "run out", "ran out", "finish", "finished", "out of", "no longer", "no more", "none left"
     }
     import re
     # Check the last two messages in history
@@ -412,15 +417,19 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         tools = []
         if bind_search:
             tools.append(search_recipes)
-        if bind_inventory:
-            tools.append(update_inventory_tool)
-        tools.append(get_recipe_details_tool)
+            if bind_inventory:
+                tools.append(update_inventory_tool)
+                tools.append(get_inventory_tool)
+        else:
+            if bind_inventory:
+                tools.append(update_inventory_tool)
+                tools.append(get_inventory_tool)
+            tools.append(get_recipe_details_tool)
 
     print(f"agent_node debug: wants='{wants_str}', bind_search={bind_search}, bind_inventory={bind_inventory}, tools={[t.name for t in tools]}")
 
     # Format the profile variables for the system prompt
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
-    ingredients_str = ", ".join(i["name"] for i in p["ingredients"]) if p["ingredients"] else "Empty"
 
     prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
     sys_message = SystemMessage(
@@ -429,7 +438,6 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             facts=facts_str,
             wants_temporary=wants_str if wants_str else "None",
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
-            ingredients=ingredients_str,
             pre_fetched_recipes=pre_fetched_recipes_str
         )
     )
@@ -443,6 +451,53 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     history = [sys_message] + state["messages"]
     response = llm_with_tools.invoke(history)
     
+    # Intercept and override response if user merely used ingredients but didn't run out
+    if not response.tool_calls:
+        latest_user_msg_lower = latest_user_msg.lower().strip() if latest_user_msg else ""
+        
+        # Determine if the message is a question or request
+        is_question = latest_user_msg_lower.endswith("?") or any(
+            qw in latest_user_msg_lower for qw in ["how", "what", "why", "where", "when", "who", "which", "can i", "can you", "could you", "recommend", "suggest"]
+        )
+        
+        # Determine if they used/consumed/cooked but didn't run out
+        use_keywords = ["used", "use", "using", "cooked", "cook", "cooking", "spent", "consumed", "consuming", "ate", "eat", "eating", "had some", "took some", "put some"]
+        run_out_keywords = ["run out", "ran out", "finished", "finish", "empty", "no more", "dont have", "don't have", "no longer have", "out of"]
+        
+        import re
+        has_use = any(re.search(r'\b' + re.escape(kw) + r'\b', latest_user_msg_lower) for kw in use_keywords)
+        has_run_out = any(re.search(r'\b' + re.escape(kw) + r'\b', latest_user_msg_lower) for kw in run_out_keywords)
+        
+        is_recipe_request = check_recommendation_desire(latest_user_msg)
+        is_checking_inventory = any(kw in latest_user_msg_lower for kw in ["do i have", "what do i have", "what ingredients", "list my", "show my"])
+        
+        # Also check if LLM generated response contains explanations that they still have it
+        response_lower = response.content.lower() if response.content else ""
+        has_still_have = "still have" in response_lower
+        has_not_run_out = any(x in response_lower for x in ["not run", "running out", "only mentioned", "did not run", "didn't run"])
+        is_explanation = has_still_have and has_not_run_out
+        
+        # Check if explanation by phrases
+        phrases = [
+            "only mentioned using",
+            "only said you used",
+            "didn't say you ran out",
+            "did not say you ran out",
+            "didn't mention running out",
+            "did not mention running out",
+            "didn't run out",
+            "did not run out"
+        ]
+        is_phrase_explanation = any(p in response_lower for p in phrases)
+        
+        is_remove_explanation = any(x in response_lower for x in ["didn't remove", "did not remove", "have not removed", "haven't removed"]) and any(y in response_lower for y in ["only", "mention", "some"])
+        
+        is_any_explanation = is_explanation or is_phrase_explanation or is_remove_explanation
+        
+        if (has_use and not has_run_out and not is_recipe_request and not is_checking_inventory and not is_question) or is_any_explanation:
+            username = state["user_name"].capitalize() if state.get("user_name") else "Carol"
+            response.content = f"Ok {username}!, If you completely run out of those ingredients, let me know anytime!"
+            
     output = {"messages": [response]}
     if rag_recipes:
         output["rag_recipes"] = rag_recipes
@@ -464,29 +519,30 @@ def format_conversational_inventory_update(username: str, action: str, items: An
     elif not isinstance(items, list):
         items = []
 
+    from app.ingredients_formatter import standardize_ingredient
+
     parts = []
     for item in items:
-        # Handle Pydantic models or standard dictionaries
-        if hasattr(item, "model_dump"):
-            item_dict = item.model_dump()
-        elif hasattr(item, "dict"):
-            item_dict = item.dict()
-        elif isinstance(item, dict):
-            item_dict = item
+        if isinstance(item, str):
+            name = standardize_ingredient(item)
         else:
-            try:
-                item_dict = dict(item)
-            except Exception:
-                item_dict = {}
+            # Handle Pydantic models or standard dictionaries
+            if hasattr(item, "model_dump"):
+                item_dict = item.model_dump()
+            elif hasattr(item, "dict"):
+                item_dict = item.dict()
+            elif isinstance(item, dict):
+                item_dict = item
+            else:
+                try:
+                    item_dict = dict(item)
+                except Exception:
+                    item_dict = {}
+            raw_name = item_dict.get("name", "").strip()
+            name = standardize_ingredient(raw_name) if raw_name else ""
 
-        name = item_dict.get("name", "").strip()
-        qty = item_dict.get("quantity", 1.0)
-        qty_str = f"{int(qty)}" if qty == int(qty) else f"{qty}"
-        unit = item_dict.get("unit", "unit").strip()
-        if unit == "unit":
-            parts.append(f"{qty_str}x {name.capitalize()}")
-        else:
-            parts.append(f"{qty_str} {unit} of {name.capitalize()}")
+        if name:
+            parts.append(name.capitalize())
             
     items_str = ", ".join(parts)
     if action == "add":
@@ -495,11 +551,11 @@ def format_conversational_inventory_update(username: str, action: str, items: An
         return f"Ok {username}, I have removed {items_str} from your inventory."
 
 
-def format_conversational_recipe_details(username: str, recipe: Dict[str, Any], user_ingredients: List[Dict[str, Any]]) -> str:
+def format_conversational_recipe_details(username: str, recipe: Dict[str, Any], user_ingredients: List[str]) -> str:
     recipe_name = recipe.get("name", "recipe").title()
     cook_time = recipe.get("minutes", 0)
     
-    user_ing_names = {i['name'].lower().strip() for i in user_ingredients}
+    user_ing_names = {name.lower().strip() for name in user_ingredients}
     have = []
     missing = []
     for ing in recipe.get('ingredients', []):
@@ -525,6 +581,7 @@ def format_conversational_recipe_details(username: str, recipe: Dict[str, Any], 
         f"**Cooking Steps:**\n{steps_str}"
     )
     return msg
+
 
 
 def tools_runner_node(state: AgentState) -> Dict[str, Any]:
@@ -671,12 +728,15 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
             actions.append(result_str)
 
-            conv_msg = format_conversational_inventory_update(
-                state["user_name"],
-                action,
-                items
-            )
-            short_circuit_replies.append(conv_msg)
+            if "warning:" in result_str.lower():
+                can_short_circuit = False
+            else:
+                conv_msg = format_conversational_inventory_update(
+                    state["user_name"],
+                    action,
+                    items
+                )
+                short_circuit_replies.append(conv_msg)
 
         elif name == "get_recipe_details_tool":
             recipe_id = args.get("recipe_id")
@@ -702,6 +762,22 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             else:
                 conv_msg = f"Recipe with ID {recipe_id} not found."
             short_circuit_replies.append(conv_msg)
+
+        elif name == "get_inventory_tool":
+            can_short_circuit = False
+            user_ingredients = state["user_profile"]["ingredients"]
+            
+            # Format inventory items
+            matched_items = [ing.capitalize() for ing in user_ingredients]
+            
+            if matched_items:
+                result_str = "Kitchen inventory:\n" + "\n".join(f"- {item}" for item in matched_items)
+            else:
+                result_str = "Kitchen inventory is empty."
+
+                
+            new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
+            actions.append("Retrieved complete kitchen inventory")
 
 
 

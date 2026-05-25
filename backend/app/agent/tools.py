@@ -1,3 +1,5 @@
+import os
+import json
 from typing import List, Dict, Any, Optional, Set
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -31,7 +33,7 @@ def get_user_profile_data(user_id: int) -> Dict[str, Any]:
                 "does_not_want_temporary": ""
             }
 
-        ingredients = [{"name": i.name, "quantity": i.quantity, "unit": i.unit} for i in user.ingredients]
+        ingredients = [i.name for i in user.ingredients]
         appliances = [a.name for a in user.appliances]
         restrictions = [r.restriction for r in user.restrictions]
         facts = [f.fact for f in user.facts]
@@ -61,6 +63,16 @@ def get_filtered_recipe_ids(user_profile: Dict[str, Any]) -> List[int]:
     user_appliances = set(a.lower() for a in user_profile.get("appliances", []))
     user_restrictions = [r.lower() for r in user_profile.get("restrictions", [])]
 
+    # Pre-build standardized user ingredient names set
+    user_ing_names = set()
+    for i in user_profile.get("ingredients", []):
+        if isinstance(i, dict):
+            name = i.get("name")
+        else:
+            name = i
+        if name:
+            user_ing_names.add(standardize_ingredient(str(name)))
+
     all_recipes = recipe_db.get_all_recipe_metadata()
     compatible_ids = []
 
@@ -82,7 +94,29 @@ def get_filtered_recipe_ids(user_profile: Dict[str, Any]) -> List[int]:
                 compatible = False
                 break
 
-        if compatible:
+        if not compatible:
+            continue
+
+        # --- Filter 3: Ingredient check ---
+        # User must be missing AT MOST 4 of the necessary ingredients
+        missing_count = 0
+        recipe_ingredients = recipe.get("ingredients", [])
+        for ing in recipe_ingredients:
+            standard_ing = standardize_ingredient(ing)
+            found = False
+            if standard_ing in user_ing_names:
+                found = True
+            else:
+                for user_ing in user_ing_names:
+                    if user_ing in standard_ing or standard_ing in user_ing:
+                        found = True
+                        break
+            if not found:
+                missing_count += 1
+                if missing_count > 4:
+                    break
+
+        if missing_count <= 4:
             compatible_ids.append(recipe["id"])
 
     return compatible_ids
@@ -97,7 +131,7 @@ def format_recipe_results(
     if not recipes:
         return "No recipes found in the database matching those filters."
 
-    user_ing_names = {standardize_ingredient(i['name']) for i in user_ingredients}
+    user_ing_names = {standardize_ingredient(name) for name in user_ingredients}
 
     formatted = []
     for r in recipes:
@@ -138,7 +172,7 @@ def get_recipe_details_by_id(recipe_id: int, user_ingredients: List[Dict[str, An
     if not recipe:
         return f"Recipe with ID {recipe_id} not found."
 
-    user_ing_names = {standardize_ingredient(i['name']) for i in user_ingredients}
+    user_ing_names = {standardize_ingredient(name) for name in user_ingredients}
 
     # Calculate ingredients we have and missing ingredients
     have = []
@@ -171,6 +205,63 @@ def get_recipe_details_by_id(recipe_id: int, user_ingredients: List[Dict[str, An
     return formatted
 
 
+# Load average unit weights from ingredients_weight.json
+AVERAGE_UNIT_WEIGHTS_G = {}
+try:
+    _base_dir = os.path.dirname(os.path.abspath(__file__))
+    _weight_path = os.path.join(os.path.dirname(_base_dir), "ingredients_weight.json")
+    if os.path.exists(_weight_path):
+        with open(_weight_path, "r", encoding="utf-8") as f:
+            AVERAGE_UNIT_WEIGHTS_G = json.load(f)
+    else:
+        print(f"Warning: ingredients_weight.json not found at {_weight_path}")
+except Exception as e:
+    print(f"Error loading ingredients_weight.json: {e}")
+
+def convert_quantity(from_qty: float, from_unit: str, to_unit: str, ingredient_name: Optional[str] = None) -> Optional[float]:
+    """Converts from_qty from from_unit to to_unit. Returns None if not convertible."""
+    u_from = from_unit.strip().lower()
+    u_to = to_unit.strip().lower()
+    
+    # Normalize unit names
+    if u_from in ("unit", "units", "piece", "pieces"):
+        u_from = "unit"
+    if u_to in ("unit", "units", "piece", "pieces"):
+        u_to = "unit"
+        
+    if u_from == u_to:
+        return from_qty
+        
+    # Weight conversion
+    weight_units = {"g": 1.0, "gram": 1.0, "grams": 1.0, "kg": 1000.0, "kilogram": 1000.0, "kilograms": 1000.0}
+    if u_from in weight_units and u_to in weight_units:
+        return from_qty * (weight_units[u_from] / weight_units[u_to])
+        
+    # Volume conversion
+    volume_units = {"ml": 1.0, "milliliter": 1.0, "milliliters": 1.0, "l": 1000.0, "liter": 1000.0, "liters": 1000.0}
+    if u_from in volume_units and u_to in volume_units:
+        return from_qty * (volume_units[u_from] / volume_units[u_to])
+        
+    # Unit to Weight/Volume conversion (requires ingredient name)
+    if ingredient_name:
+        ing_clean = ingredient_name.strip().lower()
+        if ing_clean in AVERAGE_UNIT_WEIGHTS_G:
+            unit_weight_g = AVERAGE_UNIT_WEIGHTS_G[ing_clean]
+            
+            # Unit -> Weight
+            if u_from == "unit" and u_to in weight_units:
+                qty_in_g = from_qty * unit_weight_g
+                return convert_quantity(qty_in_g, "g", u_to)
+                
+            # Weight -> Unit
+            if u_from in weight_units and u_to == "unit":
+                qty_in_g = convert_quantity(from_qty, u_from, "g")
+                if qty_in_g is not None:
+                    return qty_in_g / unit_weight_g
+                    
+    return None
+
+
 def update_ingredients_in_db(user_id: int, action: str, items: Any) -> str:
     """
     Updates the user's ingredients list in SQLite.
@@ -194,23 +285,26 @@ def update_ingredients_in_db(user_id: int, action: str, items: Any) -> str:
     try:
         updated_items = []
         for item in items:
-            # Handle Pydantic models or standard dictionaries
-            if hasattr(item, "model_dump"):
-                item_dict = item.model_dump()
-            elif hasattr(item, "dict"):
-                item_dict = item.dict()
-            elif isinstance(item, dict):
-                item_dict = item
+            if isinstance(item, str):
+                name = item.strip().lower()
             else:
-                try:
-                    item_dict = dict(item)
-                except Exception:
-                    item_dict = {}
+                # Handle Pydantic models or standard dictionaries
+                if hasattr(item, "model_dump"):
+                    item_dict = item.model_dump()
+                elif hasattr(item, "dict"):
+                    item_dict = item.dict()
+                elif isinstance(item, dict):
+                    item_dict = item
+                else:
+                    try:
+                        item_dict = dict(item)
+                    except Exception:
+                        item_dict = {}
+                name = item_dict.get("name", "").strip().lower()
 
-            name = item_dict.get("name", "").strip().lower()
             name = standardize_ingredient(name)
-            qty = float(item_dict.get("quantity", 1.0))
-            unit = item_dict.get("unit", "unit").strip().lower()
+            if not name:
+                continue
 
             # Find existing ingredient
             existing = db.query(Ingredient).filter(
@@ -219,26 +313,19 @@ def update_ingredients_in_db(user_id: int, action: str, items: Any) -> str:
             ).first()
 
             if action == "add":
-                if existing:
-                    existing.quantity += qty
-                    # Update unit if it was default
-                    if existing.unit == "unit" and unit != "unit":
-                        existing.unit = unit
-                else:
-                    new_ing = Ingredient(user_id=user_id, name=name, quantity=qty, unit=unit)
+                if not existing:
+                    new_ing = Ingredient(user_id=user_id, name=name, quantity=1.0, unit="unit")
                     db.add(new_ing)
-                updated_items.append(f"+{qty} {unit} of {name}")
+                    updated_items.append(f"added {name.capitalize()}")
+                else:
+                    updated_items.append(f"{name.capitalize()} already in stock")
 
             elif action == "remove":
                 if existing:
-                    existing.quantity = max(0.0, existing.quantity - qty)
-                    if existing.quantity <= 0.0:
-                        db.delete(existing)
-                        updated_items.append(f"removed all {name}")
-                    else:
-                        updated_items.append(f"-{qty} {unit} of {name} (remaining: {existing.quantity})")
+                    db.delete(existing)
+                    updated_items.append(f"removed {name.capitalize()}")
                 else:
-                    updated_items.append(f"could not remove {name} (not in inventory)")
+                    updated_items.append(f"could not remove {name.capitalize()} (not in inventory)")
 
         db.commit()
         return f"Successfully updated inventory: {', '.join(updated_items)}"

@@ -68,12 +68,12 @@ function RecipeBrowser({ user, profile }) {
     const rName = recipeIngName.toLowerCase();
     
     // Perform loose match (e.g. if recipe says "chicken wings" and user has "chicken wings", or "garlic" vs "garlic powder")
-    const match = profile.ingredients.find(i => {
-      const uName = i.name.toLowerCase();
-      return rName.includes(uName) || uName.includes(rName);
+    const match = profile.ingredients.find(uName => {
+      const uNameLower = uName.toLowerCase();
+      return rName.includes(uNameLower) || uNameLower.includes(rName);
     });
 
-    return match ? { matched: true, qty: match.quantity, unit: match.unit } : { matched: false };
+    return match ? { matched: true } : { matched: false };
   };
 
   return (
@@ -350,7 +350,7 @@ function RecipeBrowser({ user, profile }) {
                       {check.matched ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'hsl(var(--primary))', fontSize: '0.8rem', fontWeight: '600' }}>
                           <Check size={14} />
-                          <span>In Stock ({check.qty} {check.unit})</span>
+                          <span>In Stock</span>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#f43f5e', fontSize: '0.8rem', fontWeight: '600' }}>
