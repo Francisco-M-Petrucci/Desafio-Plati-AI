@@ -157,15 +157,16 @@ class RecipeVectorDB:
 
     def search_recipes_filtered(
         self,
-        query: str,
-        recipe_ids: Set[int],
+        query: Optional[str] = None,
+        recipe_ids: Set[int] = None,
+        excluded_ids: Optional[Set[int]] = None,
         limit: int = 3,
         culture: Optional[str] = None,
         season: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Search recipes constrained to a pre-filtered set of recipe IDs.
-        Uses vector similarity search then post-filters by ID membership, culture, and season.
+        If query is empty/None, returns any compatible recipes directly.
         """
         if culture in (None, "null", "None", "NoneType", ""):
             culture = None
@@ -175,7 +176,34 @@ class RecipeVectorDB:
         if not self.vector_store:
             return []
 
-        recipe_id_set = set(recipe_ids)
+        recipe_id_set = set(recipe_ids) if recipe_ids else set()
+        if excluded_ids:
+            recipe_id_set = recipe_id_set - set(excluded_ids)
+
+        if not query:
+            # Python-based fallback: bypass similarity search and return any compatible recipes
+            processed_results = []
+            all_meta = self.get_all_recipe_metadata()
+            for meta in all_meta:
+                recipe_id = meta.get("id")
+                if recipe_id not in recipe_id_set:
+                    continue
+                if culture:
+                    recipe_cuisine = meta.get("cuisine_type", "")
+                    if culture.lower() != recipe_cuisine.lower():
+                        continue
+                if season:
+                    tags = json.loads(meta.get("tags", "[]"))
+                    if season.lower() not in [t.lower() for t in tags]:
+                        continue
+                
+                recipe_full = self.get_recipe_by_id(recipe_id)
+                if recipe_full:
+                    processed_results.append(recipe_full)
+                if len(processed_results) >= limit:
+                    break
+            return processed_results
+
         results = self.vector_store.similarity_search(query, k=100)
 
         processed_results = []

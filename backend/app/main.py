@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.database import get_db, engine, Base
-from app.models import User, Appliance, Ingredient, DietaryRestriction, ChatMessage, UserFact, TemporaryPreference, InitialSearchRecipe
-from app.agent.graph import agent_graph, extract_facts_from_state
+from app.models import User, Appliance, Ingredient, DietaryRestriction, ChatMessage, UserFact, InitialSearchRecipe
+from app.agent.graph import agent_graph
 from app.agent.tools import get_user_profile_data
 from app.ocr import parse_receipt_image
 from app.recipes_vector_db import RecipeVectorDB
@@ -24,7 +24,14 @@ try:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE users ADD COLUMN first_name VARCHAR;"))
 except Exception as e:
-    print(f"Migration error during main startup: {e}")
+    print(f"Migration error during main startup (first_name): {e}")
+
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN wants_temporary TEXT DEFAULT '';"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN does_not_want_temporary TEXT DEFAULT '';"))
+except Exception as e:
+    print(f"Migration error during main startup (temporary_preferences columns): {e}")
 
 app = FastAPI(title="Recipe Companion API")
 
@@ -62,6 +69,10 @@ class IngredientUpdate(BaseModel):
 
 class RestrictionUpdate(BaseModel):
     restrictions: List[str]
+
+class TemporaryPreferencesUpdate(BaseModel):
+    wants_temporary: str
+    does_not_want_temporary: str
 
 class RegisterRequest(BaseModel):
     first_name: str
@@ -340,8 +351,7 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depe
         db.add(ChatMessage(user_id=req.user_id, role="assistant", content=response_text))
         db.commit()
 
-        # Extract facts in the background to improve response time
-        background_tasks.add_task(extract_facts_from_state, result)
+
 
         return {
             "response": response_text,
@@ -405,15 +415,37 @@ def get_chat_history(user_id: int, db: Session = Depends(get_db)):
 def clear_chat_history(user_id: int, db: Session = Depends(get_db)):
     """Clear chat messages history and session state."""
     db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete()
-    db.query(TemporaryPreference).filter(TemporaryPreference.user_id == user_id).delete()
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.wants_temporary = ""
+        user.does_not_want_temporary = ""
     db.commit()
     return {"status": "success", "message": "Chat history and temporary preferences cleared."}
+
+
+@app.post("/api/users/{user_id}/temporary-preferences")
+def update_temporary_preferences(user_id: int, req: TemporaryPreferencesUpdate, db: Session = Depends(get_db)):
+    """Update wants_temporary and does_not_want_temporary fields for a user."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.wants_temporary = req.wants_temporary
+    user.does_not_want_temporary = req.does_not_want_temporary
+    db.commit()
+    return {
+        "status": "success",
+        "wants_temporary": user.wants_temporary,
+        "does_not_want_temporary": user.does_not_want_temporary
+    }
 
 
 @app.delete("/api/users/{user_id}/temporary-preferences")
 def clear_temporary_preferences(user_id: int, db: Session = Depends(get_db)):
     """Clear AI short term memory temporary preferences."""
-    db.query(TemporaryPreference).filter(TemporaryPreference.user_id == user_id).delete()
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.wants_temporary = ""
+        user.does_not_want_temporary = ""
     db.commit()
     return {"status": "success", "message": "AI short term memory cleared."}
 
