@@ -93,10 +93,10 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
 # 2. Define LangChain Structured Tools for LLM Tool Binding
 @tool
 def search_recipes(
-    query: Optional[str] = None,
+    query: str = "",
     include_steps: bool = False,
-    culture: Optional[str] = None,
-    season: Optional[str] = None
+    culture: str = "",
+    season: str = ""
 ) -> str:
     """
     Search recipes by cuisine or ingredient preference. Results are pre-filtered for dietary/appliance compatibility.
@@ -173,6 +173,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
     existing_facts_str = "\n".join(f"- {f}" for f in p.get("facts", [])) if p.get("facts") else "None"
     existing_wants_str = p.get("wants_temporary", "") or "None"
     existing_not_wants_str = p.get("does_not_want_temporary", "") or "None"
+    existing_appliances_str = ", ".join(p.get("appliances", [])) if p.get("appliances") else "None"
+    existing_restrictions_str = ", ".join(p.get("restrictions", [])) if p.get("restrictions") else "None"
 
     # 3. Format the prompt and run the LLM (same as main agent)
     llm = get_llm()
@@ -180,6 +182,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         existing_facts=existing_facts_str,
         existing_wants=existing_wants_str,
         existing_not_wants=existing_not_wants_str,
+        existing_appliances=existing_appliances_str,
+        existing_restrictions=existing_restrictions_str,
         user_msg=latest_user_msg
     )
 
@@ -220,6 +224,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         if wants or not_wants:
             res = save_temporary_preferences_to_db(user_id, wants, not_wants)
             print(f"Extracted temporary preferences - Result: {res}")
+
+
 
         if saved_facts:
             print(f"Extracted memory - Saved facts: {saved_facts}")
@@ -430,12 +436,14 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
 
     # Format the profile variables for the system prompt
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
+    restrictions_str = ", ".join(p["restrictions"]) if p.get("restrictions") else "None"
 
     prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
     sys_message = SystemMessage(
         content=prompt_template.format(
             username=state["user_name"],
             facts=facts_str,
+            restrictions=restrictions_str,
             wants_temporary=wants_str if wants_str else "None",
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
             pre_fetched_recipes=pre_fetched_recipes_str
