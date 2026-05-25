@@ -93,10 +93,10 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
 # 2. Define LangChain Structured Tools for LLM Tool Binding
 @tool
 def search_recipes(
-    query: Optional[str] = None,
+    query: str = "",
     include_steps: bool = False,
-    culture: Optional[str] = None,
-    season: Optional[str] = None
+    culture: str = "",
+    season: str = ""
 ) -> str:
     """
     Search recipes by cuisine or ingredient preference. Results are pre-filtered for dietary/appliance compatibility.
@@ -238,36 +238,6 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
     return {"user_profile": profile}
 
 
-def does_want_contradict_restriction(wants: List[str], restriction: str) -> bool:
-    """Helper to detect if temporary wants contradict a dietary restriction."""
-    r = restriction.lower().strip()
-    wants_clean = [w.lower().strip() for w in wants]
-    
-    meat_terms = {"meat", "chicken", "beef", "pork", "fish", "salmon", "shrimp", "prawn", "seafood", "bacon", "steak", "turkey", "lamb", "pepperoni", "ham", "tuna", "anchovy", "anchovies", "gelatin", "lard"}
-    dairy_terms = {"milk", "cheese", "butter", "cream", "yogurt", "dairy", "lactose"}
-    egg_terms = {"egg", "eggs"}
-    honey_terms = {"honey"}
-    gluten_terms = {"gluten", "wheat", "pasta", "bread", "flour", "barley", "rye", "semolina"}
-    nut_terms = {"nut", "nuts", "peanut", "peanuts", "almond", "walnut", "cashew", "pistachio", "hazelnut", "macadamia", "pecan"}
-    carb_terms = {"pasta", "bread", "rice", "potato", "potatoes", "sugar", "sweet", "flour", "wheat", "carb", "carbs", "noodle", "noodles"}
-    
-    if r == "vegetarian":
-        return any(any(m in w for m in meat_terms) for w in wants_clean)
-    elif r == "vegan":
-        all_non_vegan = meat_terms | dairy_terms | egg_terms | honey_terms
-        return any(any(nv in w for nv in all_non_vegan) for w in wants_clean)
-    elif r == "lactose-free":
-        return any(any(d in w for d in dairy_terms) for w in wants_clean)
-    elif r == "gluten-free":
-        return any(any(g in w for g in gluten_terms) for w in wants_clean)
-    elif r == "nut-free":
-        return any(any(n in w for n in nut_terms) for w in wants_clean)
-    elif r == "low-carb":
-        return any(any(c in w for c in carb_terms) for w in wants_clean)
-    
-    return False
-
-
 def pre_filter_node(state: AgentState) -> Dict[str, Any]:
     """
     Deterministic pre-filter: removes recipes that are incompatible with
@@ -276,26 +246,9 @@ def pre_filter_node(state: AgentState) -> Dict[str, Any]:
     This is the key optimization — by narrowing the search space before
     the LLM runs, we prevent wasted tokens on unusable recipes and
     eliminate retry tool calls when the LLM receives incompatible results.
-    
-    It temporarily bypasses dietary restrictions if the user's temporary wants contradict them.
     """
     profile = state["user_profile"]
-    wants_str = profile.get("wants_temporary") or ""
-    wants_list = [w.strip().lower() for w in wants_str.split(",") if w.strip()]
-    
-    original_restrictions = profile.get("restrictions", [])
-    filtered_restrictions = []
-    for r in original_restrictions:
-        if does_want_contradict_restriction(wants_list, r):
-            print(f"Pre-filter: temporary want contradicts restriction '{r}'. Temporarily bypassing restriction during filtering.")
-        else:
-            filtered_restrictions.append(r)
-            
-    # Create temporary profile for recipe filtering
-    temp_profile = profile.copy()
-    temp_profile["restrictions"] = filtered_restrictions
-    
-    compatible_ids = get_filtered_recipe_ids(temp_profile)
+    compatible_ids = get_filtered_recipe_ids(profile)
     print(f"Pre-filter: {len(compatible_ids)} compatible recipes for user (from {len(recipe_db.get_all_recipe_metadata())} total)")
     return {"compatible_recipe_ids": compatible_ids}
 
