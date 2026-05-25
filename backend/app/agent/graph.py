@@ -13,7 +13,7 @@ from app.agent.tools import (
     get_user_profile_data,
     update_ingredients_in_db,
     add_user_fact_to_db,
-    add_user_temporary_preference_to_db,
+    save_temporary_preferences_to_db,
     get_filtered_recipe_ids,
     format_recipe_results,
     get_recipe_details_by_id,
@@ -27,6 +27,31 @@ _llm_instance_8b = None
 def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
     global _llm_instance_70b, _llm_instance_8b
     
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key and not groq_key.startswith("gsk-your-key") and not groq_key.startswith("your_groq_api_key") and len(groq_key) > 5:
+        # Use Groq Cloud
+        if "70b" in model_name or model_name == "llama-3.3-70b-versatile":
+            if _llm_instance_70b is None:
+                _llm_instance_70b = ChatOpenAI(
+                    model="llama-3.3-70b-versatile",
+                    api_key=groq_key,
+                    base_url="https://api.groq.com/openai/v1",
+                    temperature=0.2,
+                    max_retries=5
+                )
+            return _llm_instance_70b
+        else:
+            if _llm_instance_8b is None:
+                _llm_instance_8b = ChatOpenAI(
+                    model="llama-3.1-8b-instant",
+                    api_key=groq_key,
+                    base_url="https://api.groq.com/openai/v1",
+                    temperature=0.2,
+                    max_retries=5
+                )
+            return _llm_instance_8b
+
+    # Fallback to Nvidia NIM
     if model_name == "meta/llama-3.1-70b-instruct":
         if _llm_instance_70b is None:
             nvidia_key = os.getenv("NVIDIA_API_KEY")
@@ -36,7 +61,8 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
                 model=model_name,
                 api_key=nvidia_key,
                 base_url="https://integrate.api.nvidia.com/v1",
-                temperature=0.2
+                temperature=0.2,
+                max_retries=5
             )
         return _llm_instance_70b
         
@@ -49,7 +75,8 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
                 model=model_name,
                 api_key=nvidia_key,
                 base_url="https://integrate.api.nvidia.com/v1",
-                temperature=0.2
+                temperature=0.2,
+                max_retries=5
             )
         return _llm_instance_8b
         
@@ -59,20 +86,21 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
             model=model_name,
             api_key=nvidia_key,
             base_url="https://integrate.api.nvidia.com/v1",
-            temperature=0.2
+            temperature=0.2,
+            max_retries=5
         )
 
 # 2. Define LangChain Structured Tools for LLM Tool Binding
 @tool
 def search_recipes(
-    query: str,
+    query: Optional[str] = None,
     include_steps: bool = False,
     culture: Optional[str] = None,
     season: Optional[str] = None
 ) -> str:
     """
     Search recipes by cuisine or ingredient preference. Results are pre-filtered for dietary/appliance compatibility.
-    - query: specific cuisine or ingredient term (e.g., 'pasta', 'chicken', 'Mexican')
+    - query: specific cuisine or ingredient term (e.g., 'pasta', 'chicken', 'Mexican'). Optional; if omitted, returns any compatible recipes.
     - include_steps: True only if user asked for cooking steps (default False)
     - culture: cuisine filter if user specified one (e.g. 'Italian')
     - season: seasonal filter if applicable (e.g. 'Summer')
@@ -109,11 +137,94 @@ def get_recipe_details_tool(recipe_id: int) -> str:
     return "Tool executed by runner."
 
 
+
+
+
 # 3. Graph Nodes
 def load_profile_node(state: AgentState) -> Dict[str, Any]:
     """Loads the user's profile context from the SQLite database."""
     user_id = state["user_id"]
     profile = get_user_profile_data(user_id)
+    return {"user_profile": profile}
+
+
+def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
+    """
+    Programmatically extracts facts/preferences from the latest user message
+    using the same LLM model as the main agent and stores them directly in the SQLite database.
+    This runs BEFORE the main agent node.
+    """
+    # 1. Retrieve the latest user message
+    latest_user_msg = ""
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            latest_user_msg = msg.content
+            break
+            
+    if not latest_user_msg:
+        return {}
+
+    # 2. Get current profile details
+    p = state["user_profile"]
+    existing_facts_str = "\n".join(f"- {f}" for f in p.get("facts", [])) if p.get("facts") else "None"
+    existing_wants_str = p.get("wants_temporary", "") or "None"
+    existing_not_wants_str = p.get("does_not_want_temporary", "") or "None"
+
+    # 3. Format the prompt and run the LLM (same as main agent)
+    llm = get_llm()
+    prompt = FACT_EXTRACTION_PROMPT.format(
+        existing_facts=existing_facts_str,
+        existing_wants=existing_wants_str,
+        existing_not_wants=existing_not_wants_str,
+        user_msg=latest_user_msg
+    )
+
+    try:
+        # Enable native JSON Mode for Groq/OpenAI to ensure schema compliance
+        groq_key = os.getenv("GROQ_API_KEY")
+        if groq_key and not groq_key.startswith("gsk-your-key") and not groq_key.startswith("your_groq_api_key") and len(groq_key) > 5:
+            llm_json = llm.bind(response_format={"type": "json_object"})
+            response = llm_json.invoke([HumanMessage(content=prompt)])
+        else:
+            response = llm.invoke([HumanMessage(content=prompt)])
+            
+        content = response.content.strip()
+        
+        # Clean potential markdown block formatting
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+
+        parsed = json.loads(content)
+        user_id = state["user_id"]
+
+        # 4. Save extracted facts
+        saved_facts = []
+        for fact in parsed.get("permanent_facts", []):
+            res = add_user_fact_to_db(user_id, fact)
+            if "Saved fact" in res:
+                saved_facts.append(fact)
+                
+        # Save extracted temporary preferences
+        wants = parsed.get("wants_temporary", [])
+        not_wants = parsed.get("does_not_want_temporary", [])
+        
+        if wants or not_wants:
+            res = save_temporary_preferences_to_db(user_id, wants, not_wants)
+            print(f"Extracted temporary preferences - Result: {res}")
+
+        if saved_facts:
+            print(f"Extracted memory - Saved facts: {saved_facts}")
+            
+    except Exception as e:
+        print(f"Error in extract_preferences_node: {e}")
+
+    # 5. Reload user profile to ensure state contains the newly saved facts/preferences
+    profile = get_user_profile_data(state["user_id"])
     return {"user_profile": profile}
 
 
@@ -166,64 +277,149 @@ def _get_known_food_terms() -> set:
     return _known_food_terms
 
 
+def check_recommendation_desire(text: str) -> bool:
+    if not text:
+        return False
+    text_lower = text.lower().strip()
+    
+    # Keywords indicating cooking, recipe, suggestion, choosing, preference, or rejection
+    keywords = {
+        "cook", "recipe", "recipes", "make", "dinner", "lunch", "breakfast", "meal", "meals",
+        "eat", "suggest", "suggestion", "suggestions", "recommend", "recommendation", "recommendations",
+        "prepare", "cooking", "food", "what can i", "whats for", "choose", "anything", "preference",
+        "care", "whatever", "don't want", "dont want", "different", "other options", "something else",
+        "next option", "next options", "different options", "reject", "show me"
+    }
+    
+    import re
+    for kw in keywords:
+        pattern = r'\b' + re.escape(kw) + r'\b'
+        if re.search(pattern, text_lower):
+            return True
+            
+    return False
+
+def check_inventory_intent(messages: List[Any]) -> bool:
+    keywords = {
+        "bought", "got", "acquired", "used", "cooked", "remove", "add", "inventory", 
+        "stock", "pantry", "fridge", "kitchen", "have", "purchased", "used up", "consume"
+    }
+    import re
+    # Check the last two messages in history
+    for msg in reversed(messages[-2:]):
+        if msg.content:
+            text_lower = msg.content.lower()
+            for kw in keywords:
+                if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
+                    return True
+    return False
+
+
 def agent_node(state: AgentState) -> Dict[str, Any]:
     """Executes the main LLM agent model with tool binding."""
     llm = get_llm()
     
-    # Determine which tools to bind dynamically
-    tools = []
-    bind_search = False
-    bind_inventory = False
-    bind_details = False
-
-    # Find the latest user message
+    # 1. Find the latest user message
     latest_user_msg = ""
     for msg in reversed(state["messages"]):
         if isinstance(msg, HumanMessage):
             latest_user_msg = msg.content
             break
 
-    if latest_user_msg:
-        import re
-        latest_user_msg_lower = latest_user_msg.lower()
-        words = set(re.findall(r'\b[a-z]{3,}\b', latest_user_msg_lower))
-        
-        # 1. Check Food Preference / Search Intent (robust plural/substring matching)
-        known_terms = _get_known_food_terms()
-        has_food_preference = False
-        for term in known_terms:
-            pattern = r'\b' + re.escape(term) + r'(s|es)?\b'
-            if re.search(pattern, latest_user_msg_lower):
-                has_food_preference = True
-                break
-        if has_food_preference:
-            bind_search = True
-            
-        # 2. Check Inventory Action Intent
-        inventory_keywords = {
-            "add", "remove", "update", "bought", "acquired", "used", "cooked", 
-            "purchased", "ate", "inventory", "groceries", "grocery", "shop", "shopped"
-        }
-        if bool(words & inventory_keywords):
-            bind_inventory = True
-            
-        # 3. Check Recipe Details Request Intent
-        details_keywords = {"step", "steps", "detail", "details", "instruction", "instructions", "how to"}
-        if any(k in latest_user_msg_lower for k in details_keywords) or "recipe id" in latest_user_msg_lower:
-            bind_details = True
+    # 2. Get profile details
+    p = state["user_profile"]
+    wants_str = (p.get("wants_temporary") or "").strip()
+    not_wants_str = (p.get("does_not_want_temporary") or "").strip()
+    
+    # 3. Check if Wants is empty or contains "anything"
+    wants_list = [w.strip().lower() for w in wants_str.split(",") if w.strip()]
+    has_anything = "anything" in wants_list
+    wants_empty = len(wants_list) == 0
 
-    # Assemble tools list
-    if bind_search:
-        tools.append(search_recipes)
-    if bind_inventory:
-        tools.append(update_inventory_tool)
-    if bind_details:
+    latest_has_desire = check_recommendation_desire(latest_user_msg) if latest_user_msg else False
+
+    # 4. Check if we should bind search
+    bind_search = (not wants_empty) and (not has_anything)
+
+    # 5. Programmatic search if Wants contains "anything"
+    pre_fetched_recipes_str = "None available."
+    rag_recipes = []
+    
+    if has_anything and latest_has_desire:
+        # Extract previously suggested recipe IDs (even if empty)
+        import re
+        previously_suggested_ids = set()
+        for msg in state["messages"]:
+            if msg.content:
+                ids = re.findall(r'(?i)\b(?:recipe\s+)?id[:\s]+(\d+)\b', msg.content)
+                for r_id in ids:
+                    previously_suggested_ids.add(int(r_id))
+        
+        compatible_recipe_ids = set(state.get("compatible_recipe_ids", []))
+        forbidden_keywords = [w.strip().lower() for w in not_wants_str.split(",") if w.strip()]
+        
+        recipes_raw = []
+        excluded_ids = previously_suggested_ids.copy()
+        
+        for attempt in range(3):
+            search_pool = compatible_recipe_ids - excluded_ids
+            candidates = recipe_db.search_recipes_filtered(
+                query=None,
+                recipe_ids=search_pool,
+                excluded_ids=excluded_ids,
+                limit=10,
+                culture=None,
+                season=None
+            )
+            if not candidates:
+                break
+                
+            viable_in_this_run = []
+            for r in candidates:
+                has_forbidden = False
+                for forbidden in forbidden_keywords:
+                    ingredients_str = " ".join(r.get("ingredients", [])).lower()
+                    if forbidden in ingredients_str or forbidden in r.get("name", "").lower():
+                        has_forbidden = True
+                        excluded_ids.add(r["id"])
+                        break
+                if not has_forbidden:
+                    viable_in_this_run.append(r)
+            
+            if viable_in_this_run:
+                recipes_raw = viable_in_this_run[:3]
+                break
+            # Continue search loop if 0 viable recipes
+            
+        rag_recipes = recipes_raw
+        if recipes_raw:
+            pre_fetched_recipes_str = format_recipe_results(
+                recipes_raw,
+                user_ingredients=p["ingredients"],
+                include_steps=False
+            )
+        else:
+            pre_fetched_recipes_str = "No compatible recipes found."
+
+    # 6. Determine tool bindings dynamically to prevent hallucinations:
+    # - If Wants is empty and user is asking for recommendations, bind no tools
+    # - Otherwise, bind search_recipes if bind_search is True, update_inventory_tool if inventory intent is detected, and always bind get_recipe_details_tool as utility.
+    bind_inventory = check_inventory_intent(state["messages"])
+    
+    if wants_empty and latest_has_desire:
+        tools = []
+    else:
+        tools = []
+        if bind_search:
+            tools.append(search_recipes)
+        if bind_inventory:
+            tools.append(update_inventory_tool)
         tools.append(get_recipe_details_tool)
 
+    print(f"agent_node debug: wants='{wants_str}', bind_search={bind_search}, bind_inventory={bind_inventory}, tools={[t.name for t in tools]}")
+
     # Format the profile variables for the system prompt
-    p = state["user_profile"]
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
-    temp_prefs_str = "\n".join(f"- {f}" for f in p.get("temporary_preferences", [])) if p.get("temporary_preferences") else "None"
     ingredients_str = ", ".join(i["name"] for i in p["ingredients"]) if p["ingredients"] else "Empty"
 
     prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
@@ -231,8 +427,10 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         content=prompt_template.format(
             username=state["user_name"],
             facts=facts_str,
-            temporary_preferences=temp_prefs_str,
-            ingredients=ingredients_str
+            wants_temporary=wants_str if wants_str else "None",
+            does_not_want_temporary=not_wants_str if not_wants_str else "None",
+            ingredients=ingredients_str,
+            pre_fetched_recipes=pre_fetched_recipes_str
         )
     )
 
@@ -244,7 +442,12 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     # Run the LLM on the chat history (System message + conversation messages)
     history = [sys_message] + state["messages"]
     response = llm_with_tools.invoke(history)
-    return {"messages": [response]}
+    
+    output = {"messages": [response]}
+    if rag_recipes:
+        output["rag_recipes"] = rag_recipes
+        
+    return output
 
 
 def format_conversational_inventory_update(username: str, action: str, items: Any) -> str:
@@ -337,6 +540,16 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
     user_id = state["user_id"]
     compatible_ids = set(state.get("compatible_recipe_ids", []))
 
+    # Parse previous messages in the history to find already suggested recipe IDs
+    import re
+    previously_suggested_ids = set()
+    for msg in state["messages"]:
+        if msg.content:
+            ids = re.findall(r'(?i)\b(?:recipe\s+)?id[:\s]+(\d+)\b', msg.content)
+            for r_id in ids:
+                previously_suggested_ids.add(int(r_id))
+    print(f"Previously suggested recipe IDs to exclude: {previously_suggested_ids}")
+
     # Determine if we can short-circuit this turn
     short_circuit_replies = []
     can_short_circuit = True
@@ -348,7 +561,10 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
 
         if name == "search_recipes":
             can_short_circuit = False
-            query = args.get("query", "")
+            query = args.get("query")
+            # If query is passed as empty string, treat it as None
+            if not query or query.strip() == "":
+                query = None
             culture = args.get("culture")
             season = args.get("season")
             include_steps = args.get("include_steps", False)
@@ -365,26 +581,75 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             if season in (None, "null", "None", "NoneType", ""):
                 season = None
 
-            print(f"Executing search_recipes: query='{query}', culture='{culture}', season='{season}' (searching within {len(compatible_ids)} compatible recipes)")
+            # Get forbidden keywords from does_not_want_temporary
+            not_wants_str = state["user_profile"].get("does_not_want_temporary", "")
+            forbidden_keywords = [w.strip().lower() for w in not_wants_str.split(",") if w.strip()]
+            print(f"Temporary forbidden keywords: {forbidden_keywords}")
 
-            # Search ONLY within pre-filtered compatible recipes
-            recipes_raw = recipe_db.search_recipes_filtered(
-                query=query,
-                recipe_ids=compatible_ids,
-                culture=culture,
-                season=season
-            )
-
-            # Fallback: if no results with culture/season filter, retry without preferences
-            if not recipes_raw and (culture or season):
-                print(f"No results with culture='{culture}'/season='{season}', falling back to all compatible recipes")
-                recipes_raw = recipe_db.search_recipes_filtered(
+            excluded_ids = previously_suggested_ids.copy()
+            recipes_raw = []
+            max_attempts = 3
+            
+            for attempt in range(max_attempts):
+                # Search within compatible_ids minus excluded_ids
+                search_pool = compatible_ids - excluded_ids
+                print(f"Attempt {attempt + 1}/{max_attempts}: searching recipes for query='{query}' (pool size: {len(search_pool)})")
+                
+                candidates = recipe_db.search_recipes_filtered(
                     query=query,
-                    recipe_ids=compatible_ids,
-                    culture=None,
-                    season=None
+                    recipe_ids=search_pool,
+                    excluded_ids=excluded_ids,
+                    limit=10, # Request more to have buffer for post-filtering
+                    culture=culture,
+                    season=season
                 )
-
+                
+                # Fallback: if no results with culture/season filter, retry without culture/season
+                if not candidates and (culture or season):
+                    print(f"No results with culture='{culture}'/season='{season}', falling back to all compatible recipes")
+                    candidates = recipe_db.search_recipes_filtered(
+                        query=query,
+                        recipe_ids=search_pool,
+                        excluded_ids=excluded_ids,
+                        limit=10,
+                        culture=None,
+                        season=None
+                    )
+                
+                if not candidates:
+                    print("No candidate recipes found.")
+                    break
+                    
+                # Post-filter in Python
+                viable_in_this_run = []
+                for r in candidates:
+                    has_forbidden = False
+                    
+                    # Check each forbidden keyword
+                    for forbidden in forbidden_keywords:
+                        # 1. Check ingredients
+                        ingredients_str = " ".join(r.get("ingredients", [])).lower()
+                        if forbidden in ingredients_str:
+                            has_forbidden = True
+                            excluded_ids.add(r["id"])
+                            break
+                        # 2. Check recipe name
+                        if forbidden in r.get("name", "").lower():
+                            has_forbidden = True
+                            excluded_ids.add(r["id"])
+                            break
+                            
+                    if not has_forbidden:
+                        viable_in_this_run.append(r)
+                
+                if viable_in_this_run:
+                    # We found at least 1 viable recipe, satisfying the threshold of 1
+                    recipes_raw = viable_in_this_run[:3] # Suggest up to 3
+                    break
+                else:
+                    # 0 viable recipes remain, so we continue loop to re-search
+                    print(f"All candidate recipes in attempt {attempt + 1} were filtered out. Excluded IDs: {excluded_ids}")
+            
             rag_recipes.extend(recipes_raw)
 
             # Format results directly (no double-search)
@@ -438,6 +703,8 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                 conv_msg = f"Recipe with ID {recipe_id} not found."
             short_circuit_replies.append(conv_msg)
 
+
+
         else:
             # Handle unrecognized/hallucinated tools to avoid premature END
             print(f"Warning: Model called unrecognized tool '{name}'")
@@ -455,77 +722,15 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
         combined_reply = "\n\n".join(short_circuit_replies)
         new_messages.append(AIMessage(content=combined_reply))
 
+    # Reload user profile to ensure any preference/inventory changes are synced in the state
+    profile = get_user_profile_data(user_id)
+
     return {
         "messages": new_messages,
         "actions": actions,
-        "rag_recipes": rag_recipes
+        "rag_recipes": rag_recipes,
+        "user_profile": profile
     }
-
-
-def extract_facts_from_state(state: Dict[str, Any]) -> None:
-    """Asynchronously extracts permanent facts from the latest dialogue exchange."""
-    # We only analyze the last user message and the agent's final text response
-    user_msg = ""
-    assistant_msg = ""
-    
-    # Search backwards for the last HumanMessage and AIMessage (that isn't a tool call)
-    for msg in reversed(state["messages"]):
-        if isinstance(msg, HumanMessage) and not user_msg:
-            user_msg = msg.content
-        elif isinstance(msg, AIMessage) and not msg.tool_calls and not assistant_msg:
-            assistant_msg = msg.content
-            
-    if not user_msg or not assistant_msg:
-        return
-
-    try:
-        # Use the faster Llama 3.1 8B Instruct model for background fact extraction
-        llm = get_llm("meta/llama-3.1-8b-instruct")
-        existing_facts = "\n".join(f"- {f}" for f in state["user_profile"]["facts"]) if state["user_profile"]["facts"] else "None"
-        existing_temporary_preferences = "\n".join(f"- {f}" for f in state["user_profile"].get("temporary_preferences", [])) if state["user_profile"].get("temporary_preferences") else "None"
-        
-        prompt = FACT_EXTRACTION_PROMPT.format(
-            existing_facts=existing_facts,
-            existing_temporary_preferences=existing_temporary_preferences,
-            user_msg=user_msg,
-            assistant_msg=assistant_msg
-        )
-        
-        response = llm.invoke([HumanMessage(content=prompt)])
-        content = response.content.strip()
-        
-        # Clean potential markdown JSON syntax
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.endswith("```"):
-            content = content[:-3]
-        content = content.strip()
-        
-        parsed = json.loads(content)
-        user_id = state["user_id"]
-        
-        permanent_facts = parsed.get("permanent_facts", [])
-        temporary_prefs = parsed.get("temporary_preferences", [])
-        
-        saved_facts = []
-        for fact in permanent_facts:
-            res = add_user_fact_to_db(user_id, fact)
-            if "Saved fact" in res:
-                saved_facts.append(fact)
-                
-        saved_prefs = []
-        for pref in temporary_prefs:
-            res = add_user_temporary_preference_to_db(user_id, pref)
-            if "Saved temporary preference" in res:
-                saved_prefs.append(pref)
-                
-        if saved_facts:
-            print(f"Extracted and saved new permanent facts in background: {saved_facts}")
-        if saved_prefs:
-            print(f"Extracted and saved new temporary preferences in background: {saved_prefs}")
-            
-    except Exception as e:
-        print(f"Background fact extraction failed: {e}")
 
 
 # 4. Routing Decision Edges
@@ -550,13 +755,15 @@ def route_tools(state: AgentState) -> str:
 workflow = StateGraph(AgentState)
 
 workflow.add_node("load_profile", load_profile_node)
+workflow.add_node("extract_preferences", extract_preferences_node)
 workflow.add_node("pre_filter", pre_filter_node)
 workflow.add_node("agent", agent_node)
 workflow.add_node("tools", tools_runner_node)
 
-# Flow routing: START → load_profile → pre_filter → agent → (tools ↔ agent) → END
+# Flow routing: START → load_profile → extract_preferences → pre_filter → agent → (tools ↔ agent) → END
 workflow.add_edge(START, "load_profile")
-workflow.add_edge("load_profile", "pre_filter")
+workflow.add_edge("load_profile", "extract_preferences")
+workflow.add_edge("extract_preferences", "pre_filter")
 workflow.add_edge("pre_filter", "agent")
 
 workflow.add_conditional_edges(

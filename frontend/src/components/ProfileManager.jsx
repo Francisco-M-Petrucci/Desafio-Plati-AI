@@ -129,6 +129,78 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     }
   };
 
+  const wantsList = profile.wants_temporary
+    ? profile.wants_temporary.split(',').map(w => w.trim()).filter(Boolean)
+    : [];
+
+  const notWantsList = profile.does_not_want_temporary
+    ? profile.does_not_want_temporary.split(',').map(nw => nw.trim()).filter(Boolean)
+    : [];
+
+  const handleDeleteWant = async (wantToRemove) => {
+    setIsUpdating(true);
+    const updatedWants = wantsList.filter(w => w !== wantToRemove).join(', ');
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/temporary-preferences`, {
+        wants_temporary: updatedWants,
+        does_not_want_temporary: profile.does_not_want_temporary || ""
+      });
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteDislike = async (dislikeToRemove) => {
+    setIsUpdating(true);
+    const updatedNotWants = notWantsList.filter(nw => nw !== dislikeToRemove).join(', ');
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/temporary-preferences`, {
+        wants_temporary: profile.wants_temporary || "",
+        does_not_want_temporary: updatedNotWants
+      });
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleClearWants = async () => {
+    if (!window.confirm("Are you sure you want to clear all temporary wants?")) return;
+    setIsUpdating(true);
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/temporary-preferences`, {
+        wants_temporary: "",
+        does_not_want_temporary: profile.does_not_want_temporary || ""
+      });
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleClearDislikes = async () => {
+    if (!window.confirm("Are you sure you want to clear all temporary dislikes?")) return;
+    setIsUpdating(true);
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/temporary-preferences`, {
+        wants_temporary: profile.wants_temporary || "",
+        does_not_want_temporary: ""
+      });
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div className="dashboard-grid">
       {/* Sidebar: Configuration (Appliances, Restrictions, AI memory) */}
@@ -229,16 +301,16 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           </div>
         </div>
 
-        {/* AI Short-Term Memory Panel */}
+        {/* AI Short-Term Memory Panel (Wants) */}
         <div className="card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Sparkles size={16} style={{ color: 'hsl(var(--primary))' }} />
-              AI Short-Term Memory (Temporary)
+              AI Short-Term Wants (Temporary)
             </h2>
-            {profile.temporary_preferences && profile.temporary_preferences.length > 0 && (
+            {wantsList.length > 0 && (
               <button 
-                onClick={handleClearShortTermMemory}
+                onClick={handleClearWants}
                 style={{ fontSize: '0.75rem', background: 'transparent', color: 'hsl(var(--danger))', textDecoration: 'underline' }}
                 disabled={isUpdating}
               >
@@ -248,17 +320,113 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           </div>
           
           <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }} className="custom-scroll">
-            {!profile.temporary_preferences || profile.temporary_preferences.length === 0 ? (
+            {wantsList.length === 0 ? (
               <div className="empty-state" style={{ padding: '0.5rem' }}>
-                No temporary preferences saved yet (e.g. "today", "tonight").
+                No temporary wants saved yet (e.g. "pasta", "spicy", "anything").
               </div>
             ) : (
-              profile.temporary_preferences.map((pref, index) => (
-                <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', background: 'rgba(255, 255, 255, 0.01)', padding: '0.4rem 0.6rem', border: '1px solid hsl(var(--border))', borderRadius: '6px' }}>
-                  <Sparkles size={12} style={{ color: 'hsl(var(--secondary))', marginTop: '0.15rem', flexShrink: 0 }} />
-                  <span>{pref}</span>
-                </div>
-              ))
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {wantsList.map((want, index) => (
+                  <span 
+                    key={index} 
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '0.25rem', 
+                      fontSize: '0.8rem', 
+                      color: 'hsl(var(--primary))', 
+                      background: 'rgba(16, 185, 129, 0.08)', 
+                      border: '1px solid rgba(16, 185, 129, 0.2)', 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '6px' 
+                    }}
+                  >
+                    <span>{want}</span>
+                    <button 
+                      type="button" 
+                      onClick={() => handleDeleteWant(want)} 
+                      disabled={isUpdating}
+                      style={{ 
+                        background: 'transparent', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        padding: '0.1rem', 
+                        color: 'hsl(var(--text-muted))',
+                        transition: 'color 0.2s'
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* AI Short-Term Memory Panel (Dislikes) */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
+            <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Sparkles size={16} style={{ color: 'hsl(var(--danger))' }} />
+              AI Short-Term Dislikes (Temporary)
+            </h2>
+            {notWantsList.length > 0 && (
+              <button 
+                onClick={handleClearDislikes}
+                style={{ fontSize: '0.75rem', background: 'transparent', color: 'hsl(var(--danger))', textDecoration: 'underline' }}
+                disabled={isUpdating}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          
+          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }} className="custom-scroll">
+            {notWantsList.length === 0 ? (
+              <div className="empty-state" style={{ padding: '0.5rem' }}>
+                No temporary dislikes saved yet (e.g. "onions", "cheese").
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {notWantsList.map((dislike, index) => (
+                  <span 
+                    key={index} 
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '0.25rem', 
+                      fontSize: '0.8rem', 
+                      color: 'hsl(var(--danger))', 
+                      background: 'rgba(244, 63, 94, 0.08)', 
+                      border: '1px solid rgba(244, 63, 94, 0.2)', 
+                      padding: '0.25rem 0.5rem', 
+                      borderRadius: '6px' 
+                    }}
+                  >
+                    <span>{dislike}</span>
+                    <button 
+                      type="button" 
+                      onClick={() => handleDeleteDislike(dislike)} 
+                      disabled={isUpdating}
+                      style={{ 
+                        background: 'transparent', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        padding: '0.1rem', 
+                        color: 'hsl(var(--text-muted))',
+                        transition: 'color 0.2s'
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>

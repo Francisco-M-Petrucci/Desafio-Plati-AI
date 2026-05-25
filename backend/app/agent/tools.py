@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional, Set
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models import Ingredient, UserFact, Appliance, DietaryRestriction, User, TemporaryPreference
+from app.models import Ingredient, UserFact, Appliance, DietaryRestriction, User
 from app.recipes_vector_db import RecipeVectorDB
 
 # Instantiate the vector DB helper
@@ -21,20 +21,27 @@ def get_user_profile_data(user_id: int) -> Dict[str, Any]:
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            return {"ingredients": [], "appliances": [], "restrictions": [], "facts": [], "temporary_preferences": []}
+            return {
+                "ingredients": [],
+                "appliances": [],
+                "restrictions": [],
+                "facts": [],
+                "wants_temporary": "",
+                "does_not_want_temporary": ""
+            }
 
         ingredients = [{"name": i.name, "quantity": i.quantity, "unit": i.unit} for i in user.ingredients]
         appliances = [a.name for a in user.appliances]
         restrictions = [r.restriction for r in user.restrictions]
         facts = [f.fact for f in user.facts]
-        temporary_preferences = [t.preference for t in user.temporary_preferences]
 
         return {
             "ingredients": ingredients,
             "appliances": appliances,
             "restrictions": restrictions,
             "facts": facts,
-            "temporary_preferences": temporary_preferences
+            "wants_temporary": user.wants_temporary or "",
+            "does_not_want_temporary": user.does_not_want_temporary or ""
         }
     finally:
         db.close()
@@ -259,26 +266,47 @@ def add_user_fact_to_db(user_id: int, fact: str) -> str:
         db.close()
 
 
-def add_user_temporary_preference_to_db(user_id: int, preference: str) -> str:
-    """Saves a new short-term temporary preference about the user in the database."""
+def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wants: List[str]) -> str:
+    """Saves and merges new temporary wants and does_not_wants to the database, preventing duplicates."""
     db = SessionLocal()
     try:
-        # Check if preference already exists to prevent duplicate entries
-        preference_stripped = preference.strip()
-        existing = db.query(TemporaryPreference).filter(
-            TemporaryPreference.user_id == user_id,
-            TemporaryPreference.preference == preference_stripped
-        ).first()
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return "User not found."
 
-        if not existing:
-            new_pref = TemporaryPreference(user_id=user_id, preference=preference_stripped)
-            db.add(new_pref)
-            db.commit()
-            return f"Saved temporary preference: '{preference_stripped}'"
-        return "Temporary preference already remembered."
+        # Parse existing
+        existing_wants = [w.strip() for w in (user.wants_temporary or "").split(",") if w.strip()]
+        existing_not_wants = [n.strip() for n in (user.does_not_want_temporary or "").split(",") if n.strip()]
+
+        existing_wants_lower = [w.lower() for w in existing_wants]
+        existing_not_wants_lower = [n.lower() for n in existing_not_wants]
+
+        # Merge wants
+        new_wants = []
+        for w in wants:
+            w_clean = w.strip()
+            if w_clean and w_clean.lower() not in existing_wants_lower:
+                existing_wants.append(w_clean)
+                existing_wants_lower.append(w_clean.lower())
+                new_wants.append(w_clean)
+
+        # Merge does_not_wants
+        new_not_wants = []
+        for nw in does_not_wants:
+            nw_clean = nw.strip()
+            if nw_clean and nw_clean.lower() not in existing_not_wants_lower:
+                existing_not_wants.append(nw_clean)
+                existing_not_wants_lower.append(nw_clean.lower())
+                new_not_wants.append(nw_clean)
+
+        user.wants_temporary = ", ".join(existing_wants)
+        user.does_not_want_temporary = ", ".join(existing_not_wants)
+        db.commit()
+
+        return f"Merged wants: {new_wants}, Merged does not wants: {new_not_wants}"
     except Exception as e:
         db.rollback()
-        return f"Error saving temporary preference: {str(e)}"
+        return f"Error saving temporary preferences: {str(e)}"
     finally:
         db.close()
 
@@ -287,3 +315,6 @@ def add_user_temporary_preference_to_db(user_id: int, preference: str) -> str:
 def search_recipes(query: str, limit: int = 3, culture: Optional[str] = None, season: Optional[str] = None) -> List[Dict[str, Any]]:
     """Search recipes from the vector knowledge base."""
     return recipe_db.search_recipes(query, limit=limit, culture=culture, season=season)
+
+
+
