@@ -141,15 +141,9 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
     const merged = [...profile.ingredients];
     
     scannedItems.forEach(scanned => {
-      const idx = merged.findIndex(existing => existing.name.toLowerCase() === scanned.name.toLowerCase());
-      if (idx >= 0) {
-        merged[idx].quantity += scanned.quantity;
-      } else {
-        merged.push({
-          name: scanned.name.toLowerCase(),
-          quantity: scanned.quantity,
-          unit: scanned.unit.toLowerCase()
-        });
+      const name = scanned.name.toLowerCase();
+      if (!merged.includes(name)) {
+        merged.push(name);
       }
     });
 
@@ -159,7 +153,7 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
       });
       
       // Post an artificial AI notice about the upload to the conversation history database
-      const itemsListStr = scannedItems.map(i => `+${i.quantity} ${i.unit} of ${i.name}`).join(", ");
+      const itemsListStr = scannedItems.map(i => i.name).join(", ");
       const messageText = `I uploaded a shopping receipt. The system successfully added these ingredients to my kitchen: ${itemsListStr}`;
       
       setMessages(prev => [...prev, { role: 'user', content: `[Receipt Uploaded]` }]);
@@ -283,7 +277,7 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
                     textTransform: 'capitalize'
                   }}
                 >
-                  +{item.quantity} {item.unit} {item.name}
+                  +{item.name}
                 </span>
               ))}
             </div>

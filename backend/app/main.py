@@ -34,7 +34,7 @@ try:
 except Exception as e:
     print(f"Migration error during main startup (temporary_preferences columns): {e}")
 
-# Migration step: standardize existing ingredients currently in database
+# Migration step: standardize existing ingredients and reset to checklist defaults
 try:
     from app.database import SessionLocal
     db = SessionLocal()
@@ -53,22 +53,25 @@ try:
         seen_names = {}
         for ing in ings:
             standard_name = standardize_ingredient(ing.name)
-            if standard_name != ing.name:
-                if standard_name in seen_names:
-                    existing_ing = seen_names[standard_name]
-                    existing_ing.quantity += ing.quantity
-                    db.delete(ing)
-                    merged_count += 1
-                else:
-                    ing.name = standard_name
-                    seen_names[standard_name] = ing
-                    updated_count += 1
+            
+            # Reset all to checklist defaults
+            if ing.quantity != 1.0 or ing.unit != "unit":
+                ing.quantity = 1.0
+                ing.unit = "unit"
+                updated_count += 1
+                
+            if standard_name in seen_names:
+                db.delete(ing)
+                merged_count += 1
             else:
                 seen_names[standard_name] = ing
-                
+                if standard_name != ing.name:
+                    ing.name = standard_name
+                    updated_count += 1
+                    
     if updated_count > 0 or merged_count > 0:
         db.commit()
-        print(f"Database migration: Standardized {updated_count} ingredients and merged {merged_count} duplicates.")
+        print(f"Database migration: Standardized/reset {updated_count} ingredients and merged {merged_count} duplicates.")
     db.close()
 except Exception as e:
     print(f"Migration error standardizing ingredients: {e}")
@@ -100,13 +103,8 @@ class ChatRequest(BaseModel):
 class ApplianceUpdate(BaseModel):
     appliances: List[str]
 
-class IngredientItem(BaseModel):
-    name: str
-    quantity: float
-    unit: str
-
 class IngredientUpdate(BaseModel):
-    ingredients: List[IngredientItem]
+    ingredients: List[str]
 
 class RestrictionUpdate(BaseModel):
     restrictions: List[str]
@@ -121,7 +119,8 @@ class RegisterRequest(BaseModel):
     password: str
     appliances: List[str]
     restrictions: List[str]
-    ingredients: List[IngredientItem]
+    ingredients: List[str]
+
 
 
 # --- API Routes ---
@@ -181,14 +180,14 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
             
     # Add ingredients
     for ing in req.ingredients:
-        name = ing.name.strip().lower()
+        name = ing.strip().lower()
         name = standardize_ingredient(name)
         if name:
             db.add(Ingredient(
                 user_id=user.id,
                 name=name,
-                quantity=ing.quantity,
-                unit=ing.unit.strip().lower()
+                quantity=1.0,
+                unit="unit"
             ))
             
     db.commit()
@@ -200,14 +199,14 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         user_profile = {
             "appliances": [a.strip().lower() for a in req.appliances if a.strip()],
             "restrictions": [r.strip().lower() for r in req.restrictions if r.strip()],
-            "ingredients": [{"name": standardize_ingredient(i.name)} for i in req.ingredients if i.name.strip()]
+            "ingredients": [standardize_ingredient(i) for i in req.ingredients if i.strip()]
         }
         
         # 1. Filter by appliances and dietary restrictions
         compatible_ids = get_filtered_recipe_ids(user_profile)
         
         # 2. Search recipes matching ingredients
-        user_ing_names = [standardize_ingredient(i.name) for i in req.ingredients if i.name.strip()]
+        user_ing_names = [standardize_ingredient(i) for i in req.ingredients if i.strip()]
         query = ", ".join(user_ing_names) if user_ing_names else "recipe"
         
         recipes_raw = recipe_vector_db.search_recipes_filtered(
@@ -301,18 +300,19 @@ def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depend
     
     # Add new ones
     for ing in req.ingredients:
-        name = ing.name.strip().lower()
+        name = ing.strip().lower()
         name = standardize_ingredient(name)
         if name:
             db.add(Ingredient(
                 user_id=user_id,
                 name=name,
-                quantity=ing.quantity,
-                unit=ing.unit.strip().lower()
+                quantity=1.0,
+                unit="unit"
             ))
             
     db.commit()
-    return {"status": "success", "ingredients": [{"name": standardize_ingredient(i.name), "quantity": i.quantity, "unit": i.unit} for i in req.ingredients]}
+    return {"status": "success", "ingredients": [standardize_ingredient(i) for i in req.ingredients if i.strip()]}
+
 
 
 @app.post("/api/users/{user_id}/restrictions")
@@ -377,7 +377,7 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depe
         initial_state = {
             "messages": formatted_messages,
             "user_id": req.user_id,
-            "user_name": user.username,
+            "user_name": user.first_name if user.first_name else user.username.capitalize(),
             "user_profile": profile_data,
             "compatible_recipe_ids": [],
             "rag_recipes": [],

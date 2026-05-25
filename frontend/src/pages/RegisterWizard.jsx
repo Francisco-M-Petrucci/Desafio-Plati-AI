@@ -70,12 +70,10 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
   const [credentials, setCredentials] = useState({ firstName: '', username: '', password: '' });
   const [selectedAppliances, setSelectedAppliances] = useState([]);
   const [selectedRestrictions, setSelectedRestrictions] = useState([]);
-  const [selectedIngredients, setSelectedIngredients] = useState({}); // name -> { quantity, unit, emoji }
+  const [selectedIngredients, setSelectedIngredients] = useState({}); // name -> { emoji }
   
   // Custom unlisted ingredient form states
   const [customIngName, setCustomIngName] = useState('');
-  const [customIngQty, setCustomIngQty] = useState(1);
-  const [customIngUnit, setCustomIngUnit] = useState('unit');
 
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,33 +148,9 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
         delete next[ing.name];
       } else {
         next[ing.name] = {
-          quantity: ing.defaultQty,
-          unit: ing.defaultUnit,
           emoji: ing.emoji
         };
       }
-      return next;
-    });
-  };
-
-  const handleQtyChange = (name, amount) => {
-    setSelectedIngredients(prev => {
-      if (!prev[name]) return prev;
-      const next = { ...prev };
-      const newQty = Math.max(0.01, next[name].quantity + amount);
-      next[name] = {
-        ...next[name],
-        quantity: Math.round(newQty * 100) / 100
-      };
-      return next;
-    });
-  };
-
-  const handleUnitSelect = (name, unit) => {
-    setSelectedIngredients(prev => {
-      if (!prev[name]) return prev;
-      const next = { ...prev };
-      next[name] = { ...next[name], unit };
       return next;
     });
   };
@@ -189,15 +163,11 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
     setSelectedIngredients(prev => ({
       ...prev,
       [name]: {
-        quantity: parseFloat(customIngQty) || 1.0,
-        unit: customIngUnit.trim().toLowerCase(),
         emoji: '📦'
       }
     }));
 
     setCustomIngName('');
-    setCustomIngQty(1);
-    setCustomIngUnit('unit');
   };
 
   const handleRemoveSelectedIngredient = (name) => {
@@ -213,11 +183,7 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
     setError('');
 
     // Format selected ingredients into backend schema list
-    const ingredientsList = Object.entries(selectedIngredients).map(([name, item]) => ({
-      name: name,
-      quantity: item.quantity,
-      unit: item.unit
-    }));
+    const ingredientsList = Object.keys(selectedIngredients);
 
     const payload = {
       first_name: credentials.firstName.trim(),
@@ -462,7 +428,6 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
             <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', paddingRight: '0.25rem' }} className="custom-scroll">
               {COMMON_INGREDIENTS.map(ing => {
                 const isSelected = !!selectedIngredients[ing.name];
-                const activeItem = selectedIngredients[ing.name];
                 
                 return (
                   <div 
@@ -487,28 +452,12 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
                         <div style={{ fontSize: '0.85rem', fontWeight: '600', textTransform: 'capitalize', color: isSelected ? '#fff' : 'hsl(var(--text-secondary))' }}>
                           {ing.name}
                         </div>
-                        {isSelected && (
-                          <div style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', marginTop: '0.05rem', fontWeight: '500' }}>
-                            {activeItem.quantity} {activeItem.unit}
-                          </div>
-                        )}
                       </div>
                     </div>
 
                     {isSelected && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={(e) => e.stopPropagation()}>
-                        <button 
-                          onClick={() => handleQtyChange(ing.name, -0.5)}
-                          style={{ padding: '0.15rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', color: '#fff' }}
-                        >
-                          <Minus size={10} />
-                        </button>
-                        <button 
-                          onClick={() => handleQtyChange(ing.name, 0.5)}
-                          style={{ padding: '0.15rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', color: '#fff' }}
-                        >
-                          <Plus size={10} />
-                        </button>
+                      <div style={{ background: 'hsl(var(--primary))', color: '#0c111d', borderRadius: '50%', padding: '0.15rem' }}>
+                        <Check size={10} strokeWidth={3} />
                       </div>
                     )}
                   </div>
@@ -541,34 +490,6 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
                     >
                       <span>{item.emoji} {name}</span>
                       
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem' }}>
-                        <input 
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0.01;
-                            setSelectedIngredients(prev => ({
-                              ...prev,
-                              [name]: { ...prev[name], quantity: Math.max(0.01, val) }
-                            }));
-                          }}
-                          style={{ width: '40px', background: 'transparent', border: 'none', borderBottom: '1px solid hsl(var(--text-muted))', color: 'hsl(var(--primary))', textAlign: 'center', padding: 0, fontSize: '0.75rem', outline: 'none' }}
-                        />
-                        <select 
-                          value={item.unit}
-                          onChange={(e) => handleUnitSelect(name, e.target.value)}
-                          style={{ background: 'transparent', border: 'none', color: 'hsl(var(--text-secondary))', outline: 'none', padding: 0, fontSize: '0.75rem' }}
-                        >
-                          <option value="unit">unit</option>
-                          <option value="g">g</option>
-                          <option value="kg">kg</option>
-                          <option value="ml">ml</option>
-                          <option value="can">can</option>
-                          <option value="pack">pack</option>
-                          <option value="bunch">bunch</option>
-                        </select>
-                      </div>
-
                       <button 
                         onClick={() => handleRemoveSelectedIngredient(name)}
                         style={{ color: 'hsl(var(--danger))', fontSize: '0.85rem', background: 'transparent', padding: '0.1rem' }}
@@ -586,7 +507,7 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
               <h4 style={{ fontSize: '0.8rem', fontWeight: '600', color: 'hsl(var(--text-secondary))', marginBottom: '0.5rem', textAlign: 'left' }}>
                 Can't find an ingredient? Add it here:
               </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 80px auto', gap: '0.5rem', alignItems: 'end' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', alignItems: 'end' }}>
                 <input 
                   type="text" 
                   className="form-input" 
@@ -595,29 +516,13 @@ function RegisterWizard({ onRegisterSuccess, onCancel }) {
                   onChange={(e) => setCustomIngName(e.target.value)}
                   style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
                 />
-                <input 
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  className="form-input" 
-                  value={customIngQty}
-                  onChange={(e) => setCustomIngQty(e.target.value)}
-                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
-                />
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="unit"
-                  value={customIngUnit}
-                  onChange={(e) => setCustomIngUnit(e.target.value)}
-                  style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }}
-                />
                 <button type="submit" className="btn-secondary" style={{ padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem' }}>
                   <Plus size={14} />
                   <span>Add</span>
                 </button>
               </div>
             </form>
+
 
           </div>
         )}

@@ -125,7 +125,8 @@ class RecipeVectorDB:
                     "name": meta.get("name", ""),
                     "required_appliances": json.loads(meta.get("required_appliances", "[]")),
                     "cuisine_type": meta.get("cuisine_type", ""),
-                    "dietary_tags": json.loads(meta.get("dietary_tags", "[]"))
+                    "dietary_tags": json.loads(meta.get("dietary_tags", "[]")),
+                    "ingredients": json.loads(meta.get("ingredients", "[]"))
                 })
 
             self._metadata_cache = recipes
