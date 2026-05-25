@@ -70,8 +70,12 @@ class RecipeVectorDB:
         with open(seed_file_path, "r", encoding="utf-8") as f:
             recipes = json.load(f)
 
+        from app.ingredients_formatter import standardize_ingredient
         documents = []
         for r in recipes:
+            # Standardize ingredients in the recipe
+            r['ingredients'] = [standardize_ingredient(ing) for ing in r['ingredients']]
+            
             # Create a rich text representation for search
             content = f"Recipe: {r['name']}\n"
             content += f"Description: {r['description']}\n"

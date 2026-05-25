@@ -15,6 +15,7 @@ from app.agent.graph import agent_graph
 from app.agent.tools import get_user_profile_data
 from app.ocr import parse_receipt_image
 from app.recipes_vector_db import RecipeVectorDB
+from app.ingredients_formatter import standardize_ingredient
 
 # Initialize tables
 Base.metadata.create_all(bind=engine)
@@ -32,6 +33,46 @@ try:
         conn.execute(text("ALTER TABLE users ADD COLUMN does_not_want_temporary TEXT DEFAULT '';"))
 except Exception as e:
     print(f"Migration error during main startup (temporary_preferences columns): {e}")
+
+# Migration step: standardize existing ingredients currently in database
+try:
+    from app.database import SessionLocal
+    db = SessionLocal()
+    from app.ingredients_formatter import standardize_ingredient
+    
+    all_ingredients = db.query(Ingredient).all()
+    updated_count = 0
+    merged_count = 0
+    
+    from collections import defaultdict
+    user_ingredients = defaultdict(list)
+    for ing in all_ingredients:
+        user_ingredients[ing.user_id].append(ing)
+        
+    for user_id, ings in user_ingredients.items():
+        seen_names = {}
+        for ing in ings:
+            standard_name = standardize_ingredient(ing.name)
+            if standard_name != ing.name:
+                if standard_name in seen_names:
+                    existing_ing = seen_names[standard_name]
+                    existing_ing.quantity += ing.quantity
+                    db.delete(ing)
+                    merged_count += 1
+                else:
+                    ing.name = standard_name
+                    seen_names[standard_name] = ing
+                    updated_count += 1
+            else:
+                seen_names[standard_name] = ing
+                
+    if updated_count > 0 or merged_count > 0:
+        db.commit()
+        print(f"Database migration: Standardized {updated_count} ingredients and merged {merged_count} duplicates.")
+    db.close()
+except Exception as e:
+    print(f"Migration error standardizing ingredients: {e}")
+
 
 app = FastAPI(title="Recipe Companion API")
 
@@ -141,6 +182,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # Add ingredients
     for ing in req.ingredients:
         name = ing.name.strip().lower()
+        name = standardize_ingredient(name)
         if name:
             db.add(Ingredient(
                 user_id=user.id,
@@ -158,14 +200,14 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         user_profile = {
             "appliances": [a.strip().lower() for a in req.appliances if a.strip()],
             "restrictions": [r.strip().lower() for r in req.restrictions if r.strip()],
-            "ingredients": [{"name": i.name.strip().lower()} for i in req.ingredients if i.name.strip()]
+            "ingredients": [{"name": standardize_ingredient(i.name)} for i in req.ingredients if i.name.strip()]
         }
         
         # 1. Filter by appliances and dietary restrictions
         compatible_ids = get_filtered_recipe_ids(user_profile)
         
         # 2. Search recipes matching ingredients
-        user_ing_names = [i.name.strip().lower() for i in req.ingredients if i.name.strip()]
+        user_ing_names = [standardize_ingredient(i.name) for i in req.ingredients if i.name.strip()]
         query = ", ".join(user_ing_names) if user_ing_names else "recipe"
         
         recipes_raw = recipe_vector_db.search_recipes_filtered(
@@ -260,6 +302,7 @@ def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depend
     # Add new ones
     for ing in req.ingredients:
         name = ing.name.strip().lower()
+        name = standardize_ingredient(name)
         if name:
             db.add(Ingredient(
                 user_id=user_id,
@@ -269,7 +312,7 @@ def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depend
             ))
             
     db.commit()
-    return {"status": "success", "ingredients": [i.dict() for i in req.ingredients]}
+    return {"status": "success", "ingredients": [{"name": standardize_ingredient(i.name), "quantity": i.quantity, "unit": i.unit} for i in req.ingredients]}
 
 
 @app.post("/api/users/{user_id}/restrictions")
@@ -385,6 +428,8 @@ async def upload_receipt(
         
         # Parse image
         ingredients = parse_receipt_image(contents, filename=filename)
+        for ing in ingredients:
+            ing["name"] = standardize_ingredient(ing.get("name", ""))
         return {"ingredients": ingredients}
         
     except Exception as e:
