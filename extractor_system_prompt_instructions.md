@@ -1,0 +1,26 @@
+This document is meant to be used as a reference for the fact extractor node behavior and logic. Refer to it when creating and altering code related to the fact extractor node, and how to lang graph works.
+
+OBJECTIVE: The main purpose of this project's agent is to be a cooking assistant, that not only keeps track of the user's kitchen inventory profile and preferences, but also recommends recipes that the user has the ingredients to do, tailored to their specific needs and preferences, in a way that feels natural and conversational.
+Some or most of this logic is already implemented. Compare the current logic with the contents of this document to decide on the best implementation to achieve this objective, and where to apply changes IF necessary. 
+
+GENERAL RULES: While taking care to ensure accuracy and correct tool usage, whe want to minimize token consuption and save information about the user in a clear and concise manner.
+
+EXTRACTOR NODE FLOW:
+1. Upon receiving a user message, the graph first loads the user's profile (load_profile).The user profile will contain their list of kitchen appliances, their list of dietary restrictions, their list of ingredients, the contents of short memory "wants" and "does not want", and the long-term memory known-facts.
+If the node detects new information that would fit into either the long or short memory, it needs to update those fields, outputing it in the correct manner. As a guide, refer to the output already schematized. However, step 4 will detail the implementation of a new schema for specific circunstances.
+
+2. If the information that is meant to be saved to the memory relates to the profile's 
+appliances or restrictions, the node needs to directly update those fields using the correct terms, instead of saving that to the known-facts. For example, instead of saving the fact "The user does not eat meat" to the known-facts, the node should simply update the restrictions list to include "vegetarian". It needs to update the tag using the exact word for it, since it will be used in deterministic filtering. For restrictions this includes: gluten-free, lactose-free, vegetarian, vegan, low-carb, nut-free. For appliances it includes: oven, stove, airfryer, blender/mixer, microwave, slow-cooker.
+
+3. If new information contradicts previously saved information to the appliances field, it needs to be updated. For example, if the user says "My oven broke" and the appliances list already contains "oven", then the node should simply update the appliances field to remove "oven", instead of saving "user's oven broke" or similar to the known-facts.
+
+4. If new information contradicts previously saved information to the restrictions field, it must NOT be permanently updated, since dietary restrictions are a serious matter. however, it must be able to temporarily bipass that restriction based on temporary "wants". For example, users who are vegetarian might want to cook meals containing meat for a guest, but it must NOT permanently remove the "vegetarian" tag from their restrictions profile field. However, since the graph filters out recipes based on restrictions, we need to make sure that the information is saved in a way that the graph can understand. 
+
+My idea for implementing this is removing the restriction tag ONLY at the time of execution of the python filtering step, and adding it back after the filtering step is done, but ONLY if temporary "wants" contain something that would contradict the restriction. Otherwise, the restriction should remain untouched. This ensures that the restriction is only temporarily lifted when explicitly requested by the user.
+
+For this to work, it is necessary to update the system prompt that receives recipe suggestions and filters them out based on the long term memory and the "doest not want" field. Add logic to ensure that, when the agent analyzes a recipe that contains any ingredient that contradicts a certain restriction, it MUST flag a warning to the user, explicitly informing that it contains an ingredient that contradicts their restrictions. It should NOT, however, automatically exclude the recipe, but instead let the user decide wether to exclude it or not.
+
+5. If the information that is meant to be saved to the memory relates to the profile's wants or does not wants, then the node needs to check for duplicates before saving the information.
+For example, if the user says "I don't want chicken" and the wants list already contains "chicken", then the node should not add it again. If the information is new, then it should be added to the list.
+
+Analyze the flow described here and the existing code, and implement the changes necessary for the Fact Extractor Node to correctly execute this logic. Adjust your prompt to take into consideration the capabilities of the Llama 3.3 70B Versatile 128k model, and try to reduce token consumption. Make sure the code is clean, efficient, and follows the desired behavior. Add comments to the code to explain the logic.

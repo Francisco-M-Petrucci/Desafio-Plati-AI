@@ -173,6 +173,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
     existing_facts_str = "\n".join(f"- {f}" for f in p.get("facts", [])) if p.get("facts") else "None"
     existing_wants_str = p.get("wants_temporary", "") or "None"
     existing_not_wants_str = p.get("does_not_want_temporary", "") or "None"
+    existing_appliances_str = ", ".join(p.get("appliances", [])) if p.get("appliances") else "None"
+    existing_restrictions_str = ", ".join(p.get("restrictions", [])) if p.get("restrictions") else "None"
 
     # 3. Format the prompt and run the LLM (same as main agent)
     llm = get_llm()
@@ -180,6 +182,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         existing_facts=existing_facts_str,
         existing_wants=existing_wants_str,
         existing_not_wants=existing_not_wants_str,
+        existing_appliances=existing_appliances_str,
+        existing_restrictions=existing_restrictions_str,
         user_msg=latest_user_msg
     )
 
@@ -221,6 +225,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
             res = save_temporary_preferences_to_db(user_id, wants, not_wants)
             print(f"Extracted temporary preferences - Result: {res}")
 
+
+
         if saved_facts:
             print(f"Extracted memory - Saved facts: {saved_facts}")
             
@@ -232,6 +238,36 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
     return {"user_profile": profile}
 
 
+def does_want_contradict_restriction(wants: List[str], restriction: str) -> bool:
+    """Helper to detect if temporary wants contradict a dietary restriction."""
+    r = restriction.lower().strip()
+    wants_clean = [w.lower().strip() for w in wants]
+    
+    meat_terms = {"meat", "chicken", "beef", "pork", "fish", "salmon", "shrimp", "prawn", "seafood", "bacon", "steak", "turkey", "lamb", "pepperoni", "ham", "tuna", "anchovy", "anchovies", "gelatin", "lard"}
+    dairy_terms = {"milk", "cheese", "butter", "cream", "yogurt", "dairy", "lactose"}
+    egg_terms = {"egg", "eggs"}
+    honey_terms = {"honey"}
+    gluten_terms = {"gluten", "wheat", "pasta", "bread", "flour", "barley", "rye", "semolina"}
+    nut_terms = {"nut", "nuts", "peanut", "peanuts", "almond", "walnut", "cashew", "pistachio", "hazelnut", "macadamia", "pecan"}
+    carb_terms = {"pasta", "bread", "rice", "potato", "potatoes", "sugar", "sweet", "flour", "wheat", "carb", "carbs", "noodle", "noodles"}
+    
+    if r == "vegetarian":
+        return any(any(m in w for m in meat_terms) for w in wants_clean)
+    elif r == "vegan":
+        all_non_vegan = meat_terms | dairy_terms | egg_terms | honey_terms
+        return any(any(nv in w for nv in all_non_vegan) for w in wants_clean)
+    elif r == "lactose-free":
+        return any(any(d in w for d in dairy_terms) for w in wants_clean)
+    elif r == "gluten-free":
+        return any(any(g in w for g in gluten_terms) for w in wants_clean)
+    elif r == "nut-free":
+        return any(any(n in w for n in nut_terms) for w in wants_clean)
+    elif r == "low-carb":
+        return any(any(c in w for c in carb_terms) for w in wants_clean)
+    
+    return False
+
+
 def pre_filter_node(state: AgentState) -> Dict[str, Any]:
     """
     Deterministic pre-filter: removes recipes that are incompatible with
@@ -240,9 +276,26 @@ def pre_filter_node(state: AgentState) -> Dict[str, Any]:
     This is the key optimization — by narrowing the search space before
     the LLM runs, we prevent wasted tokens on unusable recipes and
     eliminate retry tool calls when the LLM receives incompatible results.
+    
+    It temporarily bypasses dietary restrictions if the user's temporary wants contradict them.
     """
     profile = state["user_profile"]
-    compatible_ids = get_filtered_recipe_ids(profile)
+    wants_str = profile.get("wants_temporary") or ""
+    wants_list = [w.strip().lower() for w in wants_str.split(",") if w.strip()]
+    
+    original_restrictions = profile.get("restrictions", [])
+    filtered_restrictions = []
+    for r in original_restrictions:
+        if does_want_contradict_restriction(wants_list, r):
+            print(f"Pre-filter: temporary want contradicts restriction '{r}'. Temporarily bypassing restriction during filtering.")
+        else:
+            filtered_restrictions.append(r)
+            
+    # Create temporary profile for recipe filtering
+    temp_profile = profile.copy()
+    temp_profile["restrictions"] = filtered_restrictions
+    
+    compatible_ids = get_filtered_recipe_ids(temp_profile)
     print(f"Pre-filter: {len(compatible_ids)} compatible recipes for user (from {len(recipe_db.get_all_recipe_metadata())} total)")
     return {"compatible_recipe_ids": compatible_ids}
 
@@ -430,12 +483,14 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
 
     # Format the profile variables for the system prompt
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
+    restrictions_str = ", ".join(p["restrictions"]) if p.get("restrictions") else "None"
 
     prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
     sys_message = SystemMessage(
         content=prompt_template.format(
             username=state["user_name"],
             facts=facts_str,
+            restrictions=restrictions_str,
             wants_temporary=wants_str if wants_str else "None",
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
             pre_fetched_recipes=pre_fetched_recipes_str

@@ -361,7 +361,7 @@ def add_user_fact_to_db(user_id: int, fact: str) -> str:
 
 
 def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wants: List[str]) -> str:
-    """Saves and merges new temporary wants and does_not_wants to the database, preventing duplicates."""
+    """Saves and merges new temporary wants and does_not_wants to the database, preventing duplicates and conflicts."""
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -375,23 +375,39 @@ def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wa
         existing_wants_lower = [w.lower() for w in existing_wants]
         existing_not_wants_lower = [n.lower() for n in existing_not_wants]
 
-        # Merge wants
+        # Merge wants (remove from does_not_want if there's a conflict)
         new_wants = []
         for w in wants:
             w_clean = w.strip()
-            if w_clean and w_clean.lower() not in existing_wants_lower:
-                existing_wants.append(w_clean)
-                existing_wants_lower.append(w_clean.lower())
-                new_wants.append(w_clean)
+            if w_clean:
+                # Remove conflict if exists in does_not_wants
+                if w_clean.lower() in existing_not_wants_lower:
+                    idx = existing_not_wants_lower.index(w_clean.lower())
+                    existing_not_wants.pop(idx)
+                    existing_not_wants_lower.pop(idx)
+                
+                # Add to wants if not already present
+                if w_clean.lower() not in existing_wants_lower:
+                    existing_wants.append(w_clean)
+                    existing_wants_lower.append(w_clean.lower())
+                    new_wants.append(w_clean)
 
-        # Merge does_not_wants
+        # Merge does_not_wants (remove from wants if there's a conflict)
         new_not_wants = []
         for nw in does_not_wants:
             nw_clean = nw.strip()
-            if nw_clean and nw_clean.lower() not in existing_not_wants_lower:
-                existing_not_wants.append(nw_clean)
-                existing_not_wants_lower.append(nw_clean.lower())
-                new_not_wants.append(nw_clean)
+            if nw_clean:
+                # Remove conflict if exists in wants
+                if nw_clean.lower() in existing_wants_lower:
+                    idx = existing_wants_lower.index(nw_clean.lower())
+                    existing_wants.pop(idx)
+                    existing_wants_lower.pop(idx)
+                
+                # Add to does_not_wants if not already present
+                if nw_clean.lower() not in existing_not_wants_lower:
+                    existing_not_wants.append(nw_clean)
+                    existing_not_wants_lower.append(nw_clean.lower())
+                    new_not_wants.append(nw_clean)
 
         user.wants_temporary = ", ".join(existing_wants)
         user.does_not_want_temporary = ", ".join(existing_not_wants)
@@ -403,6 +419,101 @@ def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wa
         return f"Error saving temporary preferences: {str(e)}"
     finally:
         db.close()
+
+
+def add_user_appliance_to_db(user_id: int, appliance: str) -> str:
+    """Saves a new appliance for the user in the database."""
+    db = SessionLocal()
+    try:
+        app_stripped = appliance.strip().lower()
+        if not app_stripped:
+            return "Appliance name cannot be empty."
+        existing = db.query(Appliance).filter(
+            Appliance.user_id == user_id,
+            Appliance.name == app_stripped
+        ).first()
+
+        if not existing:
+            new_app = Appliance(user_id=user_id, name=app_stripped)
+            db.add(new_app)
+            db.commit()
+            return f"Added appliance: '{app_stripped}'"
+        return "Appliance already added."
+    except Exception as e:
+        db.rollback()
+        return f"Error adding appliance: {str(e)}"
+    finally:
+        db.close()
+
+
+def remove_user_appliance_from_db(user_id: int, appliance: str) -> str:
+    """Removes an appliance for the user from the database."""
+    db = SessionLocal()
+    try:
+        app_stripped = appliance.strip().lower()
+        existing = db.query(Appliance).filter(
+            Appliance.user_id == user_id,
+            Appliance.name == app_stripped
+        ).first()
+
+        if existing:
+            db.delete(existing)
+            db.commit()
+            return f"Removed appliance: '{app_stripped}'"
+        return "Appliance not found in profile."
+    except Exception as e:
+        db.rollback()
+        return f"Error removing appliance: {str(e)}"
+    finally:
+        db.close()
+
+
+def add_user_restriction_to_db(user_id: int, restriction: str) -> str:
+    """Saves a new dietary restriction for the user in the database."""
+    db = SessionLocal()
+    try:
+        rest_stripped = restriction.strip().lower()
+        if not rest_stripped:
+            return "Restriction name cannot be empty."
+        existing = db.query(DietaryRestriction).filter(
+            DietaryRestriction.user_id == user_id,
+            DietaryRestriction.restriction == rest_stripped
+        ).first()
+
+        if not existing:
+            new_rest = DietaryRestriction(user_id=user_id, restriction=rest_stripped)
+            db.add(new_rest)
+            db.commit()
+            return f"Added restriction: '{rest_stripped}'"
+        return "Restriction already added."
+    except Exception as e:
+        db.rollback()
+        return f"Error adding restriction: {str(e)}"
+    finally:
+        db.close()
+
+
+def remove_user_restriction_from_db(user_id: int, restriction: str) -> str:
+    """Removes a dietary restriction for the user from the database."""
+    db = SessionLocal()
+    try:
+        rest_stripped = restriction.strip().lower()
+        existing = db.query(DietaryRestriction).filter(
+            DietaryRestriction.user_id == user_id,
+            DietaryRestriction.restriction == rest_stripped
+        ).first()
+
+        if existing:
+            db.delete(existing)
+            db.commit()
+            return f"Removed restriction: '{rest_stripped}'"
+        return "Restriction not found in profile."
+    except Exception as e:
+        db.rollback()
+        return f"Error removing restriction: {str(e)}"
+    finally:
+        db.close()
+
 
 
 # Search tool wrapper (kept for backward compatibility with /api/recipes endpoint)
