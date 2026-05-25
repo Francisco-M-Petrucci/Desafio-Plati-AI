@@ -30,7 +30,8 @@ def get_user_profile_data(user_id: int) -> Dict[str, Any]:
                 "restrictions": [],
                 "facts": [],
                 "wants_temporary": "",
-                "does_not_want_temporary": ""
+                "does_not_want_temporary": "",
+                "asked_preferences": False
             }
 
         ingredients = [i.name for i in user.ingredients]
@@ -44,8 +45,26 @@ def get_user_profile_data(user_id: int) -> Dict[str, Any]:
             "restrictions": restrictions,
             "facts": facts,
             "wants_temporary": user.wants_temporary or "",
-            "does_not_want_temporary": user.does_not_want_temporary or ""
+            "does_not_want_temporary": user.does_not_want_temporary or "",
+            "asked_preferences": user.asked_preferences if hasattr(user, "asked_preferences") else False
         }
+    finally:
+        db.close()
+
+
+def set_user_asked_preferences(user_id: int, value: bool) -> str:
+    """Updates the user's asked_preferences field in SQLite."""
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            user.asked_preferences = value
+            db.commit()
+            return f"Set asked_preferences to {value}"
+        return "User not found"
+    except Exception as e:
+        db.rollback()
+        return f"Error setting asked_preferences: {str(e)}"
     finally:
         db.close()
 

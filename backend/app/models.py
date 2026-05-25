@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -22,6 +22,7 @@ class User(Base):
     # Temporary memory preferences
     wants_temporary = Column(Text, nullable=True, default="")
     does_not_want_temporary = Column(Text, nullable=True, default="")
+    asked_preferences = Column(Boolean, nullable=False, default=False)
 
 
 class Appliance(Base):

@@ -34,6 +34,12 @@ try:
 except Exception as e:
     print(f"Migration error during main startup (temporary_preferences columns): {e}")
 
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN asked_preferences BOOLEAN DEFAULT 0;"))
+except Exception as e:
+    print(f"Migration error during main startup (asked_preferences column): {e}")
+
 # Migration step: standardize existing ingredients and reset to checklist defaults
 try:
     from app.database import SessionLocal
@@ -162,7 +168,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     user = User(
         first_name=req.first_name.strip(),
         username=username,
-        password=req.password
+        password=req.password,
+        asked_preferences=False
     )
     db.add(user)
     db.commit()
@@ -464,6 +471,7 @@ def clear_chat_history(user_id: int, db: Session = Depends(get_db)):
     if user:
         user.wants_temporary = ""
         user.does_not_want_temporary = ""
+        user.asked_preferences = False
     db.commit()
     return {"status": "success", "message": "Chat history and temporary preferences cleared."}
 
@@ -491,6 +499,7 @@ def clear_temporary_preferences(user_id: int, db: Session = Depends(get_db)):
     if user:
         user.wants_temporary = ""
         user.does_not_want_temporary = ""
+        user.asked_preferences = False
     db.commit()
     return {"status": "success", "message": "AI short term memory cleared."}
 
