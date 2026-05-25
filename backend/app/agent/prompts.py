@@ -7,6 +7,7 @@ Profile:
 - Restrictions: {restrictions}
 - Wants (Temporary): {wants_temporary}
 - Does Not Want (Temporary): {does_not_want_temporary}
+- Asked Preferences: {asked_preferences}
 
 Instructions:
 1. INVENTORY:
@@ -18,7 +19,9 @@ Instructions:
    - Never call `update_inventory_tool` to add missing ingredients from search results.
 
 2. RECIPE SUGGESTIONS:
-   - Empty Wants: Ask user conversationally for their preferences. Do NOT search.
+   - Empty Wants:
+     * If Asked Preferences is False: Ask user conversationally for their preferences. Do NOT search.
+     * If Asked Preferences is True: Do NOT search. Suggest from Pre-fetched Recipes below.
    - Wants contains "anything": Do NOT search. Suggest from Pre-fetched Recipes below.
    - Has Wants (and not "anything"): Call the search_recipes tool with the Wants contents as the query parameter.
    - Format: Format recipe list items as:
@@ -46,6 +49,7 @@ Profile:
 - Restrictions: {restrictions}
 - Wants (Temporary): {wants_temporary}
 - Does Not Want (Temporary): {does_not_want_temporary}
+- Asked Preferences: {asked_preferences}
 
 Instructions:
 1. INVENTORY:
@@ -57,7 +61,9 @@ Instructions:
    - Never call `update_inventory_tool` to add missing ingredients from search results.
 
 2. RECIPE SUGGESTIONS (Note: search_recipes is disabled this turn):
-   - Empty Wants: Respond only by asking user conversationally for their preferences. Do NOT call tools.
+   - Empty Wants:
+     * If Asked Preferences is False: Respond only by asking user conversationally for their preferences. Do NOT call tools.
+     * If Asked Preferences is True: Recommend from Pre-fetched Recipes below directly. Do NOT call tools.
    - Wants contains "anything": Recommend from Pre-fetched Recipes below directly. Do NOT call tools.
    - Format: Format recipe list items as:
      * **[RECIPE NAME]** — [Cook time] mins
@@ -89,7 +95,9 @@ Extract NEW facts or temporary preferences from the User message.
 
 # Constraints
 - Save ONLY simple words or phrases in temporary preferences. No full sentences.
-- If user wants you to choose or has no preference, save "anything" to "wants_temporary".
+- Asked Preferences status: {asked_preferences}
+- If Asked Preferences status is False, you MUST NOT write "anything" to "wants_temporary" under any circumstances.
+- If Asked Preferences status is True, you are allowed to write "anything" to "wants_temporary" if the user wants you to choose or has no preference.
 - Ignore inventory updates: Do NOT extract ingredients user bought, has, used, or ran out of.
 - Deduplication: Do NOT extract any fact, preference, appliance, or restriction already present in the Profile Context lists below.
 

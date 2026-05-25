@@ -17,7 +17,8 @@ from app.agent.tools import (
     get_filtered_recipe_ids,
     format_recipe_results,
     get_recipe_details_by_id,
-    recipe_db
+    recipe_db,
+    set_user_asked_preferences
 )
 
 # 1. LLM Initializer
@@ -170,6 +171,7 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
 
     # 2. Get current profile details
     p = state["user_profile"]
+    asked_pref_at_start = p.get("asked_preferences", False)
     existing_facts_str = "\n".join(f"- {f}" for f in p.get("facts", [])) if p.get("facts") else "None"
     existing_wants_str = p.get("wants_temporary", "") or "None"
     existing_not_wants_str = p.get("does_not_want_temporary", "") or "None"
@@ -184,7 +186,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         existing_not_wants=existing_not_wants_str,
         existing_appliances=existing_appliances_str,
         existing_restrictions=existing_restrictions_str,
-        user_msg=latest_user_msg
+        user_msg=latest_user_msg,
+        asked_preferences=str(asked_pref_at_start)
     )
 
     try:
@@ -221,11 +224,13 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         wants = parsed.get("wants_temporary", [])
         not_wants = parsed.get("does_not_want_temporary", [])
         
+        # Enforce: If asked_preferences was False at start of turn, extractor must not write "anything"
+        if not asked_pref_at_start:
+            wants = [w for w in wants if w.lower().strip() != "anything"]
+        
         if wants or not_wants:
             res = save_temporary_preferences_to_db(user_id, wants, not_wants)
             print(f"Extracted temporary preferences - Result: {res}")
-
-
 
         if saved_facts:
             print(f"Extracted memory - Saved facts: {saved_facts}")
@@ -349,14 +354,23 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
 
     latest_has_desire = check_recommendation_desire(latest_user_msg) if latest_user_msg else False
 
+    # Get asked_preferences status at start of turn
+    asked_pref_at_start = p.get("asked_preferences", False)
+
+    # If the user intent is detected to recommend a recipe, check asked_preferences status
+    if latest_has_desire and not asked_pref_at_start and wants_empty:
+        # Set asked_preferences to True in DB so that next turn has it as True
+        set_user_asked_preferences(state["user_id"], True)
+        p["asked_preferences"] = True
+
     # 4. Check if we should bind search
     bind_search = (not wants_empty) and (not has_anything)
 
-    # 5. Programmatic search if Wants contains "anything"
+    # 5. Programmatic search if Wants contains "anything" or (Wants is empty and asked_preferences was True at the start of the turn)
     pre_fetched_recipes_str = "None available."
     rag_recipes = []
     
-    if has_anything and latest_has_desire:
+    if (has_anything or (wants_empty and asked_pref_at_start)) and latest_has_desire:
         # Extract previously suggested recipe IDs (even if empty)
         import re
         previously_suggested_ids = set()
@@ -446,7 +460,8 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             restrictions=restrictions_str,
             wants_temporary=wants_str if wants_str else "None",
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
-            pre_fetched_recipes=pre_fetched_recipes_str
+            pre_fetched_recipes=pre_fetched_recipes_str,
+            asked_preferences=str(asked_pref_at_start)
         )
     )
 
