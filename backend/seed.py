@@ -11,11 +11,14 @@ def populate_initial_search_recipes(db, user, appliances, restrictions, ingredie
     if not has_initial:
         print(f"Calculating initial recipe matches for {user.username}...")
         from app.agent.tools import get_filtered_recipe_ids
+        from app.ingredients_formatter import standardize_ingredient
+        
+        standard_ingredients = [standardize_ingredient(ing) for ing in ingredients]
         
         user_profile = {
             "appliances": appliances,
             "restrictions": restrictions,
-            "ingredients": [{"name": ing} for ing in ingredients]
+            "ingredients": [{"name": ing} for ing in standard_ingredients]
         }
         
         # Filter recipes by appliance & restriction
@@ -23,7 +26,7 @@ def populate_initial_search_recipes(db, user, appliances, restrictions, ingredie
         print(f"User {user.username} compatible IDs: {compatible_ids}")
         
         # Rank by ingredients matching
-        query = ", ".join(ingredients)
+        query = ", ".join(standard_ingredients)
         vector_db = RecipeVectorDB()
         recipes_raw = vector_db.search_recipes_filtered(
             query=query,
@@ -96,14 +99,15 @@ def seed_database():
         ])
         
         # Add ingredients
+        from app.ingredients_formatter import standardize_ingredient
         db.add_all([
-            Ingredient(user_id=alice.id, name="chicken wings", quantity=1.0, unit="kg"),
-            Ingredient(user_id=alice.id, name="olive oil", quantity=500.0, unit="ml"),
-            Ingredient(user_id=alice.id, name="garlic powder", quantity=1.0, unit="jar"),
-            Ingredient(user_id=alice.id, name="parmesan cheese", quantity=200.0, unit="g"),
-            Ingredient(user_id=alice.id, name="salt", quantity=1.0, unit="pack"),
-            Ingredient(user_id=alice.id, name="black pepper", quantity=1.0, unit="shaker"),
-            Ingredient(user_id=alice.id, name="parsley", quantity=1.0, unit="bunch")
+            Ingredient(user_id=alice.id, name=standardize_ingredient("chicken wings"), quantity=1.0, unit="kg"),
+            Ingredient(user_id=alice.id, name=standardize_ingredient("olive oil"), quantity=500.0, unit="ml"),
+            Ingredient(user_id=alice.id, name=standardize_ingredient("garlic powder"), quantity=1.0, unit="jar"),
+            Ingredient(user_id=alice.id, name=standardize_ingredient("parmesan cheese"), quantity=200.0, unit="g"),
+            Ingredient(user_id=alice.id, name=standardize_ingredient("salt"), quantity=1.0, unit="pack"),
+            Ingredient(user_id=alice.id, name=standardize_ingredient("black pepper"), quantity=1.0, unit="shaker"),
+            Ingredient(user_id=alice.id, name=standardize_ingredient("parsley"), quantity=1.0, unit="bunch")
         ])
         
         # Add dietary restrictions
@@ -154,13 +158,14 @@ def seed_database():
         ])
         
         # Add ingredients
+        from app.ingredients_formatter import standardize_ingredient
         db.add_all([
-            Ingredient(user_id=bob.id, name="pizza dough", quantity=1.0, unit="unit"),
-            Ingredient(user_id=bob.id, name="canned san marzano tomatoes", quantity=1.0, unit="can"),
-            Ingredient(user_id=bob.id, name="fresh mozzarella cheese", quantity=250.0, unit="g"),
-            Ingredient(user_id=bob.id, name="fresh basil leaves", quantity=1.0, unit="bunch"),
-            Ingredient(user_id=bob.id, name="extra virgin olive oil", quantity=500.0, unit="ml"),
-            Ingredient(user_id=bob.id, name="salt", quantity=1.0, unit="pack")
+            Ingredient(user_id=bob.id, name=standardize_ingredient("pizza dough"), quantity=1.0, unit="unit"),
+            Ingredient(user_id=bob.id, name=standardize_ingredient("canned san marzano tomatoes"), quantity=1.0, unit="can"),
+            Ingredient(user_id=bob.id, name=standardize_ingredient("fresh mozzarella cheese"), quantity=250.0, unit="g"),
+            Ingredient(user_id=bob.id, name=standardize_ingredient("fresh basil leaves"), quantity=1.0, unit="bunch"),
+            Ingredient(user_id=bob.id, name=standardize_ingredient("extra virgin olive oil"), quantity=500.0, unit="ml"),
+            Ingredient(user_id=bob.id, name=standardize_ingredient("salt"), quantity=1.0, unit="pack")
         ])
         
         # Add dietary restrictions

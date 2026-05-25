@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Ingredient, UserFact, Appliance, DietaryRestriction, User
 from app.recipes_vector_db import RecipeVectorDB
+from app.ingredients_formatter import standardize_ingredient
 
 # Instantiate the vector DB helper
 recipe_db = RecipeVectorDB()
@@ -96,20 +97,22 @@ def format_recipe_results(
     if not recipes:
         return "No recipes found in the database matching those filters."
 
-    user_ing_names = {i['name'].lower().strip() for i in user_ingredients}
+    user_ing_names = {standardize_ingredient(i['name']) for i in user_ingredients}
 
     formatted = []
     for r in recipes:
         # Calculate missing ingredients
         missing = []
         for ing in r['ingredients']:
-            ing_lower = ing.lower().strip()
-            # Simple substring checking for robust matching
+            standard_ing = standardize_ingredient(ing)
             found = False
-            for user_ing in user_ing_names:
-                if user_ing in ing_lower or ing_lower in user_ing:
-                    found = True
-                    break
+            if standard_ing in user_ing_names:
+                found = True
+            else:
+                for user_ing in user_ing_names:
+                    if user_ing in standard_ing or standard_ing in user_ing:
+                        found = True
+                        break
             if not found:
                 missing.append(ing)
 
@@ -135,19 +138,22 @@ def get_recipe_details_by_id(recipe_id: int, user_ingredients: List[Dict[str, An
     if not recipe:
         return f"Recipe with ID {recipe_id} not found."
 
-    user_ing_names = {i['name'].lower().strip() for i in user_ingredients}
+    user_ing_names = {standardize_ingredient(i['name']) for i in user_ingredients}
 
     # Calculate ingredients we have and missing ingredients
     have = []
     missing = []
 
     for ing in recipe['ingredients']:
-        ing_lower = ing.lower().strip()
+        standard_ing = standardize_ingredient(ing)
         found = False
-        for user_ing in user_ing_names:
-            if user_ing in ing_lower or ing_lower in user_ing:
-                found = True
-                break
+        if standard_ing in user_ing_names:
+            found = True
+        else:
+            for user_ing in user_ing_names:
+                if user_ing in standard_ing or standard_ing in user_ing:
+                    found = True
+                    break
         if found:
             have.append(ing)
         else:
@@ -202,6 +208,7 @@ def update_ingredients_in_db(user_id: int, action: str, items: Any) -> str:
                     item_dict = {}
 
             name = item_dict.get("name", "").strip().lower()
+            name = standardize_ingredient(name)
             qty = float(item_dict.get("quantity", 1.0))
             unit = item_dict.get("unit", "unit").strip().lower()
 
