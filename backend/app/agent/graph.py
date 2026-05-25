@@ -96,15 +96,15 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
 def search_recipes(
     query: str = "",
     include_steps: bool = False,
-    culture: str = "",
-    season: str = ""
+    culture: Optional[str] = None,
+    season: Optional[str] = None
 ) -> str:
     """
     Search recipes by cuisine or ingredient preference. Results are pre-filtered for dietary/appliance compatibility.
     - query: specific cuisine or ingredient term (e.g., 'pasta', 'chicken', 'Mexican'). Optional; if omitted, returns any compatible recipes.
     - include_steps: True only if user asked for cooking steps (default False)
-    - culture: cuisine filter if user specified one (e.g. 'Italian')
-    - season: seasonal filter if applicable (e.g. 'Summer')
+    - culture: cuisine filter if user specified one (e.g. 'Italian'). Omit if not specified.
+    - season: seasonal filter if applicable (e.g. 'Summer'). Omit if not specified.
     """
     # This function body is not called directly during graph execution.
     # The tools_runner_node handles actual execution with pre-filtered IDs.
@@ -331,6 +331,59 @@ def check_inventory_intent(messages: List[Any]) -> bool:
     return False
 
 
+def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
+    """Parse a Groq tool_use_failed error to recover the intended tool call.
+    
+    When Llama 3.3 70B generates tool calls in the raw <function=name {json}</function>
+    format instead of the structured API format, Groq rejects it with a tool_use_failed
+    error. This function extracts the intended function name and arguments so we can
+    recover gracefully.
+    
+    Handles both direct openai.BadRequestError (with .body attribute) and
+    LangChain-wrapped exceptions (by falling back to string parsing).
+    """
+    import re
+    import uuid
+    
+    failed_gen = None
+    
+    # Strategy 1: Extract from exception .body attribute (direct openai error)
+    # Strategy 2: Check .__cause__ for chained/wrapped exceptions
+    for exc in [error, getattr(error, "__cause__", None)]:
+        if exc is None:
+            continue
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            error_info = body.get("error", body)
+            if isinstance(error_info, dict) and error_info.get("code") == "tool_use_failed":
+                failed_gen = error_info.get("failed_generation", "")
+                break
+    
+    # Strategy 3: Fallback to parsing the error string representation
+    if not failed_gen and "tool_use_failed" in str(error):
+        failed_gen = str(error)
+    
+    if not failed_gen:
+        return None
+    
+    # Parse the <function=name ...></function> pattern
+    match = re.search(r'<function=(\w+)\s+(\{.*\})\s*</function>', failed_gen, re.DOTALL)
+    if not match:
+        return None
+    
+    func_name = match.group(1)
+    try:
+        args = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return None
+    
+    return {
+        "name": func_name,
+        "args": args,
+        "id": f"call_{uuid.uuid4().hex[:24]}"
+    }
+
+
 def agent_node(state: AgentState) -> Dict[str, Any]:
     """Executes the main LLM agent model with tool binding."""
     llm = get_llm()
@@ -472,7 +525,19 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     
     # Run the LLM on the chat history (System message + conversation messages)
     history = [sys_message] + state["messages"]
-    response = llm_with_tools.invoke(history)
+    try:
+        response = llm_with_tools.invoke(history)
+    except Exception as e:
+        # Handle Groq tool_use_failed: Llama 3.3 sometimes generates tool calls in raw
+        # <function=name {json}</function> format instead of using the structured API.
+        # Recover by parsing the intended call from the error (checks .body, .__cause__, and str).
+        parsed_call = _parse_failed_tool_call(e)
+        
+        if parsed_call:
+            response = AIMessage(content="", tool_calls=[parsed_call])
+            print(f"Recovered from tool_use_failed: parsed tool call '{parsed_call['name']}'")
+        else:
+            raise
     
     # Intercept and override response if user merely used ingredients but didn't run out
     if not response.tool_calls:

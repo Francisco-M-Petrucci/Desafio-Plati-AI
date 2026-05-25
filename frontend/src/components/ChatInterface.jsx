@@ -75,9 +75,15 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
       }
     } catch (err) {
       console.error(err);
+      const detail = err.response?.data?.detail || '';
+      const isApiKeyIssue = detail.toLowerCase().includes('nvidia_api_key') || 
+                            detail.toLowerCase().includes('api key is not set');
+      const apiKeyAdvice = isApiKeyIssue 
+        ? ' Please check if NVIDIA_API_KEY is configured in your .env file.' 
+        : '';
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: `Sorry, I encountered an error running the agent. ${err.response?.data?.detail || ''}. Please check if NVIDIA_API_KEY is configured in your .env file.` 
+        content: `Sorry, I encountered an error running the agent. ${detail}${apiKeyAdvice}` 
       }]);
     } finally {
       setIsSending(false);
@@ -175,10 +181,48 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
   };
 
   const handleClearChat = async () => {
-    if (!window.confirm("Clear all conversation history?")) return;
+    if (!window.confirm("Clear all conversation history? This will also reinstate any temporarily disabled dietary restrictions immediately.")) return;
     try {
+      // 1. Reinstate any temporarily disabled restrictions
+      const storedKey = `temp_disabled_restrictions_${user.user_id}`;
+      let tempDisabled = {};
+      try {
+        const stored = localStorage.getItem(storedKey);
+        if (stored) {
+          tempDisabled = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error("Error reading temp disabled restrictions during chat clear:", e);
+      }
+
+      const tempDisabledNames = Object.keys(tempDisabled);
+      if (tempDisabledNames.length > 0) {
+        const currentRestrictions = profile?.restrictions || [];
+        const newRestrictions = [...currentRestrictions];
+        let dbChanged = false;
+
+        tempDisabledNames.forEach(restName => {
+          if (!newRestrictions.includes(restName)) {
+            newRestrictions.push(restName);
+            dbChanged = true;
+          }
+        });
+
+        if (dbChanged) {
+          await axios.post(`${API_BASE}/api/users/${user.user_id}/restrictions`, {
+            restrictions: newRestrictions
+          });
+        }
+        
+        localStorage.removeItem(storedKey);
+      }
+
+      // 2. Clear conversation history
       await axios.delete(`${API_BASE}/api/users/${user.user_id}/chat-history`);
       setMessages([]);
+      
+      // 3. Trigger profile update to update lists/sync sibling components
+      onProfileUpdate();
     } catch (err) {
       console.error(err);
     }
