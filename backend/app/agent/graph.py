@@ -9,7 +9,7 @@ from langgraph.graph import StateGraph, START, END
 
 from app.agent.state import AgentState
 from app.ingredient_categories import get_ingredient_category, resolve_category_aliases, CATEGORY_ORDER
-from app.agent.prompts import SYSTEM_PROMPT_WITH_SEARCH, SYSTEM_PROMPT_WITHOUT_SEARCH, FACT_EXTRACTION_PROMPT
+from app.agent.prompts import SYSTEM_PROMPT_WITH_SEARCH, SYSTEM_PROMPT_WITHOUT_SEARCH, SYSTEM_PROMPT_POST_SEARCH, FACT_EXTRACTION_PROMPT, POST_SEARCH_CROSS_CHECK_SECTION
 from app.agent.tools import (
     get_user_profile_data,
     update_ingredients_in_db,
@@ -359,8 +359,9 @@ def check_inventory_intent(messages: List[Any]) -> bool:
         "run out", "ran out", "finish", "finished", "out of", "no longer", "no more", "none left"
     }
     import re
-    # Check the last two messages in history
-    for msg in reversed(messages[-2:]):
+    # Filter for messages sent by the user, then check the last two
+    user_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
+    for msg in reversed(user_messages[-2:]):
         if msg.content:
             text_lower = msg.content.lower()
             for kw in keywords:
@@ -422,8 +423,6 @@ def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
         "args": args,
         "id": f"call_{uuid.uuid4().hex[:24]}"
     }
-
-
 def agent_node(state: AgentState) -> Dict[str, Any]:
     """Executes the main LLM agent model with tool binding."""
     llm = get_llm()
@@ -434,6 +433,32 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         if isinstance(msg, HumanMessage):
             latest_user_msg = msg.content
             break
+
+    # Count how many search_recipes calls have been made since the last HumanMessage.
+    # This drives:
+    #   - is_post_search: True after ANY search result so the LLM can cross-check and
+    #     re-search as many times as needed when the user has many dislikes.
+    #   - Safety cap: after MAX_SEARCH_CALLS searches, bind_search is forced off so the
+    #     LLM must present whatever it has, preventing an infinite loop.
+    MAX_SEARCH_CALLS = 5
+    search_calls_this_turn = 0
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            break
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            search_calls_this_turn += sum(
+                1 for tc in msg.tool_calls if tc["name"] == "search_recipes"
+            )
+
+    # is_post_search: True whenever a search result just arrived (first OR re-search).
+    # The LLM may call search_recipes again up to MAX_SEARCH_CALLS times if every
+    # retrieved batch is fully filtered out by the user's dislikes or long-term facts.
+    is_post_search = (
+        isinstance(state["messages"][-1], ToolMessage)
+        and search_calls_this_turn >= 1
+    )
+    print(f"agent_node debug: is_post_search={is_post_search}, search_calls_this_turn={search_calls_this_turn}/{MAX_SEARCH_CALLS}")
+
 
     # 2. Get profile details
     p = state["user_profile"]
@@ -483,8 +508,34 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         set_user_asked_preferences(state["user_id"], True)
         p["asked_preferences"] = True
 
-    # 4. Check if we should bind search
-    bind_search = (not wants_empty) and (not has_anything) and latest_has_desire
+    # 4. Check if we should bind search.
+    #
+    # bind_inventory is computed here (earlier than the tool-binding block below) because
+    # it is also needed to determine bind_search correctly.
+    #
+    # The key insight: when wants_str is already set (the extractor captured a preference),
+    # we should bind search_recipes regardless of whether check_recommendation_desire fired.
+    # check_recommendation_desire only guards the case where wants are *empty* (to decide
+    # whether the agent should ask for preferences or wait). When wants are already populated,
+    # the intent to search is implicit — unless the current message is a pure inventory action.
+    #
+    # Example that was broken before this fix:
+    #   User: "I want pasta but not with mushrooms"
+    #   → extractor sets wants="pasta" → wants_empty=False
+    #   → "want" is not in check_recommendation_desire keywords → latest_has_desire=False
+    #   → old formula: bind_search = True and True and False = False  ← BUG: no search bound
+    #   → new formula: bind_search = True and True and (False or True) = True  ← FIXED
+    bind_inventory = check_inventory_intent(state["messages"])
+    bind_search = (not wants_empty) and (not has_anything) and (
+        latest_has_desire or not bind_inventory
+    )
+    # Safety cap: once MAX_SEARCH_CALLS searches have happened in the same turn,
+    # force bind_search off so search_recipes cannot be called again.
+    # This is a last-resort safeguard — normal flow should terminate earlier
+    # because the recipe pool is exhausted or the LLM finds valid survivors.
+    if search_calls_this_turn >= MAX_SEARCH_CALLS:
+        bind_search = False
+        print(f"agent_node debug: safety cap reached ({MAX_SEARCH_CALLS} searches) — bind_search forced to False")
 
     # 5. Programmatic search if Wants contains "anything" or (Wants is empty and asked_preferences was True at the start of the turn)
     pre_fetched_recipes_str = "None available."
@@ -551,7 +602,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     # - Otherwise, bind search_recipes if bind_search is True, inventory tools if
     #   inventory intent is detected, and get_recipe_details_tool only when recipe
     #   IDs have already been shown in the conversation (prevents random ID calls).
-    bind_inventory = check_inventory_intent(state["messages"])
+    # Note: bind_inventory was already computed above alongside bind_search.
     bind_details = check_details_intent(state["messages"])
     
     # Check if any recipe IDs have been shown in prior messages so the user has
@@ -606,7 +657,30 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         if removed:
             recent_updates_str += "\n- Removed: " + ", ".join(f'"{f}"' for f in removed)
 
-    prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
+    # Build the cross-check section only when we are responding to search_recipes results.
+    # Format it separately first (resolves all inline variables),
+    # then pass the rendered string into the main prompt via {cross_check_section}.
+    if is_post_search:
+        cross_check_section = POST_SEARCH_CROSS_CHECK_SECTION.format(
+            username=state["user_name"],
+            does_not_want_str=not_wants_str if not_wants_str else "None",
+            search_calls_this_turn=search_calls_this_turn,
+            max_search_calls=MAX_SEARCH_CALLS,
+        )
+    else:
+        cross_check_section = ""
+
+
+    search_results_str = ""
+    if is_post_search:
+        last_msg = state["messages"][-1]
+        search_results_str = last_msg.content if last_msg and hasattr(last_msg, "content") else ""
+
+    if is_post_search:
+        prompt_template = SYSTEM_PROMPT_POST_SEARCH
+    else:
+        prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
+
     sys_message = SystemMessage(
         content=prompt_template.format(
             username=state["user_name"],
@@ -616,7 +690,9 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
             pre_fetched_recipes=pre_fetched_recipes_str,
             asked_preferences=str(asked_pref_at_start),
-            recent_memory_updates=recent_updates_str
+            recent_memory_updates=recent_updates_str,
+            cross_check_section=cross_check_section,
+            search_results=search_results_str
         )
     )
 
