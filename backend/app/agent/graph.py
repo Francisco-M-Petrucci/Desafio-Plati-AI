@@ -95,14 +95,12 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
 @tool
 def search_recipes(
     query: str = "",
-    include_steps: bool = False,
     culture: Optional[str] = None,
     season: Optional[str] = None
 ) -> str:
     """
     Search recipes by cuisine or ingredient preference. Results are pre-filtered for dietary/appliance compatibility.
     - query: specific cuisine or ingredient term (e.g., 'pasta', 'chicken', 'Mexican'). Optional; if omitted, returns any compatible recipes.
-    - include_steps: True only if user asked for cooking steps (default False)
     - culture: cuisine filter if user specified one (e.g. 'Italian'). Omit if not specified.
     - season: seasonal filter if applicable (e.g. 'Summer'). Omit if not specified.
     """
@@ -262,18 +260,26 @@ def pre_filter_node(state: AgentState) -> Dict[str, Any]:
 _known_food_terms = None
 
 def _get_known_food_terms() -> set:
-    """Build a set of food-related terms from the recipe DB cuisines + curated keywords."""
+    """Build a set of food-related terms from the recipe DB cuisines, recipe names/ingredients, and curated keywords."""
     global _known_food_terms
     if _known_food_terms is not None:
         return _known_food_terms
 
-    # Data-driven: extract cuisine types from actual recipe data
+    # Data-driven: extract cuisine types, recipe name words, and ingredient words from recipe data
     cuisines = set()
     try:
+        import re
         for r in recipe_db.get_all_recipe_metadata():
             ct = r.get("cuisine_type", "").lower().strip()
             if ct:
                 cuisines.add(ct)
+            name = r.get("name", "").lower().strip()
+            if name:
+                for word in re.findall(r'[a-zA-Z]{3,}', name):
+                    cuisines.add(word)
+            for ing in r.get("ingredients", []):
+                for word in re.findall(r'[a-zA-Z]{3,}', ing.lower()):
+                    cuisines.add(word)
     except Exception:
         pass
 
@@ -367,7 +373,8 @@ def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
         return None
     
     # Parse the <function=name ...></function> pattern
-    match = re.search(r'<function=(\w+)\s+(\{.*\})\s*</function>', failed_gen, re.DOTALL)
+    # Llama 3.3 might omit the space between the function name and the JSON arguments.
+    match = re.search(r'<function=(\w+)\s*(\{.*?\})\s*</function>', failed_gen, re.DOTALL)
     if not match:
         return None
     
@@ -406,6 +413,33 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     wants_empty = len(wants_list) == 0
 
     latest_has_desire = check_recommendation_desire(latest_user_msg) if latest_user_msg else False
+
+    # Programmatic fallback: if Wants is empty but the user intent indicates recipe desire,
+    # check if the user mentioned any known food terms in their message.
+    # If they did, we programmatically extract those food terms as temporary wants.
+    if wants_empty and latest_has_desire:
+        known_terms = _get_known_food_terms()
+        extracted_wants = []
+        import re
+        words_in_msg = re.findall(r'\b[a-zA-Z]{3,}\b', latest_user_msg.lower())
+        for word in words_in_msg:
+            if word in known_terms:
+                extracted_wants.append(word)
+        
+        if extracted_wants:
+            # Deduplicate while preserving order
+            seen = set()
+            extracted_wants = [x for x in extracted_wants if not (x in seen or seen.add(x))]
+            
+            # Save to database to keep session persistent
+            save_temporary_preferences_to_db(state["user_id"], extracted_wants, [])
+            
+            # Update local state variables
+            p["wants_temporary"] = ",".join(extracted_wants)
+            wants_str = p["wants_temporary"]
+            wants_list = extracted_wants
+            wants_empty = False
+            print(f"agent_node: Programmatically extracted wants {extracted_wants} from user message '{latest_user_msg}'")
 
     # Get asked_preferences status at start of turn
     asked_pref_at_start = p.get("asked_preferences", False)
@@ -473,33 +507,46 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         if recipes_raw:
             pre_fetched_recipes_str = format_recipe_results(
                 recipes_raw,
-                user_ingredients=p["ingredients"],
-                include_steps=False
+                user_ingredients=p["ingredients"]
             )
         else:
             pre_fetched_recipes_str = "No compatible recipes found."
 
     # 6. Determine tool bindings dynamically to prevent hallucinations:
     # - If Wants is empty and user is asking for recommendations, bind no tools
-    # - Otherwise, bind search_recipes if bind_search is True, update_inventory_tool if inventory intent is detected, and always bind get_recipe_details_tool as utility.
+    #   (forces the agent to ask for preferences instead of picking a random recipe).
+    # - Otherwise, bind search_recipes if bind_search is True, inventory tools if
+    #   inventory intent is detected, and get_recipe_details_tool only when recipe
+    #   IDs have already been shown in the conversation (prevents random ID calls).
     bind_inventory = check_inventory_intent(state["messages"])
+    
+    # Check if any recipe IDs have been shown in prior messages so the user has
+    # concrete recipes to reference. Matches both raw ("Recipe ID: <num>") and minified ("(ID: <num>)") formats.
+    import re
+    has_shown_recipes = any(
+        msg.content and re.search(r'(?i)\b(?:recipe\s+)?id[:\s]+\d+\b', msg.content)
+        for msg in state["messages"]
+    )
     
     if wants_empty and latest_has_desire:
         tools = []
+        # If recipe IDs have been shown, they might be asking for details/cooking steps of one of them.
+        # We must bind get_recipe_details_tool in this case so the agent can retrieve them.
+        if has_shown_recipes:
+            tools.append(get_recipe_details_tool)
     else:
         tools = []
         if bind_search:
             tools.append(search_recipes)
-            if bind_inventory:
-                tools.append(update_inventory_tool)
-                tools.append(get_inventory_tool)
-        else:
-            if bind_inventory:
-                tools.append(update_inventory_tool)
-                tools.append(get_inventory_tool)
+        if bind_inventory:
+            tools.append(update_inventory_tool)
+            tools.append(get_inventory_tool)
+        # Only bind get_recipe_details_tool when recipe IDs have been shown in the
+        # conversation, so the model can't call it with a made-up ID before any search.
+        if has_shown_recipes:
             tools.append(get_recipe_details_tool)
 
-    print(f"agent_node debug: wants='{wants_str}', bind_search={bind_search}, bind_inventory={bind_inventory}, tools={[t.name for t in tools]}")
+    print(f"agent_node debug: wants='{wants_str}', bind_search={bind_search}, bind_inventory={bind_inventory}, has_shown_recipes={has_shown_recipes}, tools={[t.name for t in tools]}")
 
     # Format the profile variables for the system prompt
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
@@ -712,13 +759,6 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                 query = None
             culture = args.get("culture")
             season = args.get("season")
-            include_steps = args.get("include_steps", False)
-
-            # Normalize boolean input (in case it is passed as a string like "false")
-            if include_steps in (False, "false", "False", 0, "0"):
-                include_steps = False
-            else:
-                include_steps = bool(include_steps)
 
             # Normalize null-like string inputs
             if culture in (None, "null", "None", "NoneType", ""):
@@ -800,8 +840,7 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             # Format results directly (no double-search)
             result_str = format_recipe_results(
                 recipes_raw,
-                user_ingredients=state["user_profile"]["ingredients"],
-                include_steps=include_steps
+                user_ingredients=state["user_profile"]["ingredients"]
             )
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
             actions.append(f"Searched recipes for: {query}" + (f" (cuisine: {culture})" if culture else ""))
