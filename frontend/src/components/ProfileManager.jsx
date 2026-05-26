@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Trash2, Plus, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
+import { getIngredientCategory, CATEGORY_STYLES } from '../utils/ingredientCategories';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -9,12 +10,106 @@ const DIETARY_OPTIONS = ['gluten-free', 'lactose-free', 'vegetarian', 'vegan', '
 
 function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
   const [newIngName, setNewIngName] = useState('');
-  
   const [isUpdating, setIsUpdating] = useState(false);
+  const [activeRestrictionModal, setActiveRestrictionModal] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
 
-  const handleApplianceToggle = async (applianceName) => {
+  // Load temporary disabled restrictions state
+  const [tempDisabledRestrictions, setTempDisabledRestrictions] = useState(() => {
+    try {
+      const stored = localStorage.getItem(`temp_disabled_restrictions_${user.user_id}`);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Current time state to avoid calling Date.now() during render (react-hooks/purity rule)
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  // Combined timer effect for ticks and expiration checks
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setCurrentTime(now);
+
+      if (!user?.user_id || !profile?.restrictions) return;
+
+      const expiredList = [];
+      const updatedTemp = { ...tempDisabledRestrictions };
+      let changed = false;
+
+      Object.entries(tempDisabledRestrictions).forEach(([restName, expTime]) => {
+        if (expTime <= now) {
+          expiredList.push(restName);
+          delete updatedTemp[restName];
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        setTempDisabledRestrictions(updatedTemp);
+        localStorage.setItem(`temp_disabled_restrictions_${user.user_id}`, JSON.stringify(updatedTemp));
+
+        const reactivate = async () => {
+          const newRestrictions = [...profile.restrictions];
+          let dbChanged = false;
+
+          expiredList.forEach(rest => {
+            if (!newRestrictions.includes(rest)) {
+              newRestrictions.push(rest);
+              dbChanged = true;
+            }
+          });
+
+          if (dbChanged) {
+            try {
+              await axios.post(`${API_BASE}/api/users/${user.user_id}/restrictions`, {
+                restrictions: newRestrictions
+              });
+              onProfileUpdate();
+            } catch (err) {
+              console.error("Error auto-reactivating restriction:", err);
+            }
+          }
+        };
+
+        reactivate();
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [user?.user_id, profile?.restrictions, tempDisabledRestrictions, onProfileUpdate]);
+
+  // Sync state from localStorage when profile restrictions change (e.g. from Clear History in Chat)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`temp_disabled_restrictions_${user.user_id}`);
+      const parsed = stored ? JSON.parse(stored) : {};
+      Promise.resolve().then(() => {
+        setTempDisabledRestrictions(parsed);
+      });
+    } catch {
+      Promise.resolve().then(() => {
+        setTempDisabledRestrictions({});
+      });
+    }
+  }, [profile.restrictions, user.user_id]);
+
+  const handleApplianceToggle = (applianceName) => {
+    const isCurrentlyActive = profile.appliances.includes(applianceName);
+    setConfirmModal({
+      type: 'appliance',
+      name: applianceName,
+      action: isCurrentlyActive ? 'remove' : 'add',
+      onConfirm: () => executeApplianceToggle(applianceName, isCurrentlyActive)
+    });
+  };
+
+  const executeApplianceToggle = async (applianceName, isCurrentlyActive) => {
+    setConfirmModal(null);
     setIsUpdating(true);
-    const updated = profile.appliances.includes(applianceName)
+    const updated = isCurrentlyActive
       ? profile.appliances.filter(a => a !== applianceName)
       : [...profile.appliances, applianceName];
     
@@ -31,11 +126,49 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
   };
 
   const handleRestrictionToggle = async (restrictionName) => {
+    const isActive = profile.restrictions.includes(restrictionName);
+    const isTempDisabled = tempDisabledRestrictions[restrictionName] && tempDisabledRestrictions[restrictionName] > currentTime;
+
+    if (isTempDisabled) {
+      // Reactivate immediately (re-add to DB, remove from temp list)
+      setIsUpdating(true);
+      const updatedTemp = { ...tempDisabledRestrictions };
+      delete updatedTemp[restrictionName];
+      setTempDisabledRestrictions(updatedTemp);
+      localStorage.setItem(`temp_disabled_restrictions_${user.user_id}`, JSON.stringify(updatedTemp));
+
+      const updated = [...profile.restrictions, restrictionName];
+      try {
+        await axios.post(`${API_BASE}/api/users/${user.user_id}/restrictions`, {
+          restrictions: updated
+        });
+        onProfileUpdate();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
+
+    if (isActive) {
+      // Open custom options modal for active restriction
+      setActiveRestrictionModal(restrictionName);
+    } else {
+      // Inactive: confirm adding it
+      setConfirmModal({
+        type: 'restriction',
+        name: restrictionName,
+        action: 'add',
+        onConfirm: () => executeAddRestriction(restrictionName)
+      });
+    }
+  };
+
+  const executeAddRestriction = async (restrictionName) => {
+    setConfirmModal(null);
     setIsUpdating(true);
-    const updated = profile.restrictions.includes(restrictionName)
-      ? profile.restrictions.filter(r => r !== restrictionName)
-      : [...profile.restrictions, restrictionName];
-      
+    const updated = [...profile.restrictions, restrictionName];
     try {
       await axios.post(`${API_BASE}/api/users/${user.user_id}/restrictions`, {
         restrictions: updated
@@ -46,6 +179,61 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const handleTempDisable = async (restrictionName) => {
+    setIsUpdating(true);
+    setActiveRestrictionModal(null);
+
+    const expirationTime = Date.now() + 30 * 60 * 1000;
+    const updatedTemp = {
+      ...tempDisabledRestrictions,
+      [restrictionName]: expirationTime
+    };
+    setTempDisabledRestrictions(updatedTemp);
+    localStorage.setItem(`temp_disabled_restrictions_${user.user_id}`, JSON.stringify(updatedTemp));
+
+    const updated = profile.restrictions.filter(r => r !== restrictionName);
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/restrictions`, {
+        restrictions: updated
+      });
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handlePermanentRemove = async (restrictionName) => {
+    setIsUpdating(true);
+    setActiveRestrictionModal(null);
+
+    const updatedTemp = { ...tempDisabledRestrictions };
+    delete updatedTemp[restrictionName];
+    setTempDisabledRestrictions(updatedTemp);
+    localStorage.setItem(`temp_disabled_restrictions_${user.user_id}`, JSON.stringify(updatedTemp));
+
+    const updated = profile.restrictions.filter(r => r !== restrictionName);
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/restrictions`, {
+        restrictions: updated
+      });
+      onProfileUpdate();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const getRemainingTimeStr = (expirationTime) => {
+    const diff = expirationTime - currentTime;
+    if (diff <= 0) return '';
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleAddIngredient = async (e) => {
@@ -107,18 +295,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     }
   };
 
-  const handleClearShortTermMemory = async () => {
-    if (!window.confirm("Are you sure you want to clear AI's short-term memory (temporary preferences)?")) return;
-    setIsUpdating(true);
-    try {
-      await axios.delete(`${API_BASE}/api/users/${user.user_id}/temporary-preferences`);
-      onProfileUpdate();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+
 
   const wantsList = profile.wants_temporary
     ? profile.wants_temporary.split(',').map(w => w.trim()).filter(Boolean)
@@ -192,6 +369,27 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     }
   };
 
+  // Group user's ingredients by category
+  const categorizedIngredients = {};
+  profile.ingredients.forEach(ing => {
+    const cat = getIngredientCategory(ing);
+    if (!categorizedIngredients[cat]) {
+      categorizedIngredients[cat] = [];
+    }
+    categorizedIngredients[cat].push(ing);
+  });
+
+  const categoryOrder = [
+    'Meat, Poultry & Seafood',
+    'Fruits',
+    'Vegetables & Greens',
+    'Dairy & Eggs',
+    'Grains, Pasta & Baking',
+    'Oils, Condiments & Liquids',
+    'Herbs, Spices & Seasonings',
+    'Other Pantry Items'
+  ];
+
   return (
     <div className="dashboard-grid">
       {/* Sidebar: Configuration (Appliances, Restrictions, AI memory) */}
@@ -235,6 +433,27 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {DIETARY_OPTIONS.map(dietOption => {
               const active = profile.restrictions.includes(dietOption);
+              const expTime = tempDisabledRestrictions[dietOption];
+              const isTempDisabled = expTime && expTime > currentTime;
+
+              let borderStyle = 'solid';
+              let borderColor = 'hsl(var(--border))';
+              let background = '';
+              let color = 'hsl(var(--text-secondary))';
+              let label = dietOption;
+
+              if (active) {
+                borderColor = 'hsl(var(--danger))';
+                background = 'rgba(244, 63, 94, 0.12)';
+                color = '#fff';
+              } else if (isTempDisabled) {
+                borderStyle = 'dashed';
+                borderColor = '#f59e0b';
+                background = 'rgba(245, 158, 11, 0.08)';
+                color = '#fcd34d';
+                label = `${dietOption} (Paused: ${getRemainingTimeStr(expTime)})`;
+              }
+
               return (
                 <button
                   key={dietOption}
@@ -246,12 +465,13 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
                     fontSize: '0.85rem',
                     padding: '0.4rem 0.8rem',
                     borderRadius: '8px',
-                    borderColor: active ? 'hsl(var(--danger))' : 'hsl(var(--border))',
-                    background: active ? 'rgba(244, 63, 94, 0.12)' : '',
-                    color: active ? '#fff' : 'hsl(var(--text-secondary))'
+                    borderStyle,
+                    borderColor,
+                    background,
+                    color
                   }}
                 >
-                  {dietOption}
+                  {label}
                 </button>
               );
             })}
@@ -469,41 +689,258 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
               <p style={{ fontSize: '0.8rem' }}>Add some ingredients above, upload a shopping receipt, or chat with the AI.</p>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
-              {profile.ingredients.map(ing => (
-                <div 
-                  key={ing} 
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    padding: '0.75rem 1rem', 
-                    background: 'rgba(255, 255, 255, 0.02)', 
-                    border: '1px solid hsl(var(--border))', 
-                    borderRadius: '10px',
-                    transition: 'var(--transition-fast)'
-                  }}
-                  className="inventory-card"
-                >
-                  <div>
-                    <div style={{ fontWeight: '600', textTransform: 'capitalize' }}>{ing}</div>
-                  </div>
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveIngredient(ing)}
-                    style={{ background: 'transparent', color: 'hsl(var(--text-muted))', padding: '0.25rem' }}
-                    className="delete-ing-btn"
-                    disabled={isUpdating}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {categoryOrder.map(catKey => {
+                const items = categorizedIngredients[catKey] || [];
+                if (items.length === 0) return null;
+                const catStyle = CATEGORY_STYLES[catKey] || CATEGORY_STYLES['Other Pantry Items'];
+                
+                return (
+                  <div 
+                    key={catKey} 
+                    style={{ 
+                      background: 'rgba(255, 255, 255, 0.01)', 
+                      border: '1px solid hsl(var(--border))', 
+                      borderLeft: `4px solid ${catStyle.accent}`, 
+                      borderRadius: '12px', 
+                      padding: '1.25rem',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                    }}
                   >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+                    <h3 style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      fontSize: '1.05rem', 
+                      fontWeight: '700', 
+                      color: '#fff', 
+                      marginBottom: '1rem', 
+                      fontFamily: 'var(--font-display)' 
+                    }}>
+                      <span style={{ marginRight: '0.5rem', fontSize: '1.25rem' }}>{catStyle.emoji}</span>
+                      {catKey}
+                      <span style={{
+                        fontSize: '0.75rem',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '9999px',
+                        background: catStyle.pillBg,
+                        color: catStyle.text,
+                        border: `1px solid ${catStyle.border}`,
+                        fontWeight: '700',
+                        marginLeft: '0.75rem',
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}>{items.length}</span>
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                      {items.map(ing => (
+                        <div 
+                          key={ing} 
+                          style={{ 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            padding: '0.75rem 1rem', 
+                            background: 'rgba(255, 255, 255, 0.02)', 
+                            border: '1px solid hsl(var(--border))', 
+                            borderRadius: '10px',
+                            transition: 'var(--transition-fast)'
+                          }}
+                          className="inventory-card"
+                        >
+                          <div>
+                            <div style={{ fontWeight: '600', textTransform: 'capitalize', fontSize: '0.875rem' }}>{ing}</div>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveIngredient(ing)}
+                            style={{ background: 'transparent', color: 'hsl(var(--text-muted))', padding: '0.25rem' }}
+                            className="delete-ing-btn"
+                            disabled={isUpdating}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
       </div>
+
+      {/* Custom Modal for dietary restriction adjustment */}
+      {activeRestrictionModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'hsl(var(--bg-card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '16px',
+            padding: '1.75rem',
+            maxWidth: '440px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', fontFamily: 'var(--font-display)', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem', textTransform: 'capitalize' }}>
+                🛡️ Manage {activeRestrictionModal}
+              </h3>
+              <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.5' }}>
+                Would you like to temporarily disable the <strong>{activeRestrictionModal}</strong> restriction for 30 minutes to explore other recipes, or remove it permanently from your profile?
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button 
+                type="button" 
+                className="btn-primary" 
+                onClick={() => handleTempDisable(activeRestrictionModal)}
+                style={{ 
+                  background: 'linear-gradient(90deg, #d97706, #f59e0b)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '0.65rem',
+                  fontWeight: '600'
+                }}
+              >
+                ⏱️ Temporarily Disable for 30 Mins
+              </button>
+              
+              <button 
+                type="button" 
+                className="btn-danger" 
+                onClick={() => handlePermanentRemove(activeRestrictionModal)}
+                style={{ 
+                  padding: '0.65rem',
+                  fontWeight: '600'
+                }}
+              >
+                🗑️ Permanently Remove Restriction
+              </button>
+
+              <button 
+                type="button" 
+                className="btn-secondary" 
+                onClick={() => setActiveRestrictionModal(null)}
+                style={{ 
+                  padding: '0.65rem',
+                  marginTop: '0.25rem'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          backdropFilter: 'blur(3px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'hsl(var(--bg-card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            animation: 'slideUp 0.2s ease-out'
+          }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+              <div style={{
+                background: confirmModal.action === 'add' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                color: confirmModal.action === 'add' ? 'hsl(var(--primary))' : 'hsl(var(--danger))',
+                borderRadius: '50%',
+                padding: '0.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                {confirmModal.action === 'add' ? (
+                  <Plus size={20} />
+                ) : (
+                  <Trash2 size={20} />
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: '700', fontFamily: 'var(--font-display)', color: '#fff' }}>
+                  {confirmModal.action === 'add' ? 'Add' : 'Remove'} {confirmModal.type === 'appliance' ? 'Appliance' : 'Dietary Restriction'}?
+                </h3>
+                <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.875rem', lineHeight: '1.5', marginTop: '0.25rem' }}>
+                  {confirmModal.type === 'appliance' ? (
+                    confirmModal.action === 'add' ? (
+                      <>Are you sure you want to add <strong>{confirmModal.name}</strong> to your kitchen appliances?</>
+                    ) : (
+                      <>Are you sure you want to remove <strong>{confirmModal.name}</strong> from your kitchen appliances?</>
+                    )
+                  ) : (
+                    <>Are you sure you want to add the dietary restriction <strong>{confirmModal.name}</strong> to your profile?</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+              <button 
+                type="button" 
+                className="btn-secondary" 
+                onClick={() => setConfirmModal(null)}
+                style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}
+                disabled={isUpdating}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary" 
+                onClick={confirmModal.onConfirm}
+                style={{ 
+                  padding: '0.5rem 1.25rem', 
+                  fontSize: '0.875rem',
+                  background: confirmModal.action === 'add' 
+                    ? 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-hover)) 100%)' 
+                    : 'linear-gradient(135deg, hsl(var(--danger)) 0%, #be123c 100%)',
+                  color: confirmModal.action === 'add' ? '#0c111d' : '#fff',
+                  border: 'none',
+                  boxShadow: confirmModal.action === 'add' 
+                    ? '0 4px 10px hsla(var(--primary) / 0.2)' 
+                    : '0 4px 10px hsla(var(--danger) / 0.2)'
+                }}
+                disabled={isUpdating}
+              >
+                {confirmModal.action === 'add' ? 'Confirm Add' : 'Confirm Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -143,8 +143,7 @@ def get_filtered_recipe_ids(user_profile: Dict[str, Any]) -> List[int]:
 
 def format_recipe_results(
     recipes: List[Dict[str, Any]],
-    user_ingredients: List[Dict[str, Any]],
-    include_steps: bool = False
+    user_ingredients: List[Dict[str, Any]]
 ) -> str:
     """Formats a list of recipe dicts into a readable string for the LLM tool response."""
     if not recipes:
@@ -176,10 +175,6 @@ def format_recipe_results(
         )
         if missing:
             recipe_str += f"Missing Ingredients: {', '.join(missing)}\n"
-
-        if include_steps:
-            recipe_str += f"Ingredients: {', '.join(r['ingredients'])}\n"
-            recipe_str += f"Steps:\n" + "\n".join(f"  {i+1}. {step}" for i, step in enumerate(r['steps'])) + "\n"
 
         formatted.append(recipe_str.strip())
     return "\n---\n".join(formatted)
