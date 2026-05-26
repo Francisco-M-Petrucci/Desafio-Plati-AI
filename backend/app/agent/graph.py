@@ -8,6 +8,7 @@ from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 
 from app.agent.state import AgentState
+from app.ingredient_categories import get_ingredient_category, resolve_category_aliases, CATEGORY_ORDER
 from app.agent.prompts import SYSTEM_PROMPT_WITH_SEARCH, SYSTEM_PROMPT_WITHOUT_SEARCH, FACT_EXTRACTION_PROMPT
 from app.agent.tools import (
     get_user_profile_data,
@@ -134,9 +135,10 @@ def get_recipe_details_tool(recipe_id: int) -> str:
 
 
 @tool
-def get_inventory_tool() -> str:
+def get_inventory_tool(categories: Optional[List[str]] = None) -> str:
     """
-    Retrieve the complete list of ingredients in the user's kitchen inventory.
+    Retrieve the user's kitchen inventory, organized by type.
+    - categories: optional list of section keywords to filter (e.g. ['meat', 'vegetables']). Omit to retrieve all sections.
     """
     return "Tool executed by runner."
 
@@ -955,17 +957,40 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             can_short_circuit = False
             user_ingredients = state["user_profile"]["ingredients"]
             
-            # Format inventory items
-            matched_items = [ing.capitalize() for ing in user_ingredients]
+            # Resolve optional category filter
+            raw_categories = args.get("categories") or []
+            requested_categories = resolve_category_aliases(raw_categories) if raw_categories else []
             
-            if matched_items:
-                result_str = "Kitchen inventory:\n" + "\n".join(f"- {item}" for item in matched_items)
-            else:
+            if not user_ingredients:
                 result_str = "Kitchen inventory is empty."
+            else:
+                # Group ingredients by category
+                grouped = {}
+                for ing in user_ingredients:
+                    cat = get_ingredient_category(ing)
+                    if cat not in grouped:
+                        grouped[cat] = []
+                    grouped[cat].append(ing.capitalize())
 
-                
+                # If the LLM passed specific categories, keep only those sections
+                if requested_categories:
+                    grouped = {cat: items for cat, items in grouped.items() if cat in requested_categories}
+
+                if not grouped:
+                    result_str = "No items found in the requested categories."
+                else:
+                    # Build output following the canonical category order.
+                    # Each category is a bold header on its own line, items listed beneath,
+                    # sections separated by a blank line for clear visual boundaries.
+                    sections = []
+                    for cat in CATEGORY_ORDER:
+                        if cat in grouped:
+                            items_str = ", ".join(sorted(grouped[cat]))
+                            sections.append(f"**{cat}**\n• {items_str}")
+                    result_str = "Kitchen inventory:\n\n" + "\n\n".join(sections)
+
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
-            actions.append("Retrieved complete kitchen inventory")
+            actions.append("Retrieved kitchen inventory")
 
 
 
