@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, TypedDict, Annotated
+from typing import List, Dict, Any, TypedDict, Annotated, Optional
 from langgraph.graph.message import add_messages
 from langchain_core.messages import BaseMessage
 
@@ -24,4 +24,8 @@ class AgentState(TypedDict):
     
     # Memory updates tracked in this turn (e.g. {"added": [...], "removed": [...]})
     recent_memory_updates: Dict[str, List[str]]
+    
+    # Extracted user intent (e.g. "recipe_recommendation_request", "inventory_action", "general_chat")
+    user_intent: Optional[str]
+
 

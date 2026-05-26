@@ -191,6 +191,7 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         asked_preferences=str(asked_pref_at_start)
     )
 
+    intent = "general_chat"
     try:
         # Enable native JSON Mode for Groq/OpenAI to ensure schema compliance
         groq_key = os.getenv("GROQ_API_KEY")
@@ -213,6 +214,7 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
 
         parsed = json.loads(content)
         user_id = state["user_id"]
+        intent = parsed.get("user_intent", "general_chat")
 
         # 4. Save/remove extracted facts
         saved_facts = []
@@ -234,6 +236,13 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         # Enforce: If asked_preferences was False at start of turn, extractor must not write "anything"
         if not asked_pref_at_start:
             wants = [w for w in wants if w.lower().strip() != "anything"]
+            
+        # If user intent is NOT a recipe recommendation request, and we did NOT just ask them
+        # for their preferences in the previous turn, do not save temporary wants!
+        # This prevents statements of general preferences (like "I love Mexican food") from
+        # populating the wants list when the user hasn't asked for a recipe recommendation.
+        if intent != "recipe_recommendation_request" and not asked_pref_at_start:
+            wants = []
         
         if wants or not_wants:
             res = save_temporary_preferences_to_db(user_id, wants, not_wants)
@@ -253,7 +262,8 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
     profile = get_user_profile_data(state["user_id"])
     return {
         "user_profile": profile,
-        "recent_memory_updates": {"added": saved_facts, "removed": removed_facts}
+        "recent_memory_updates": {"added": saved_facts, "removed": removed_facts},
+        "user_intent": intent
     }
 
 
@@ -315,28 +325,6 @@ def _get_known_food_terms() -> set:
     return _known_food_terms
 
 
-def check_recommendation_desire(text: str) -> bool:
-    if not text:
-        return False
-    text_lower = text.lower().strip()
-    
-    # Keywords indicating cooking, recipe, suggestion, choosing, preference, or rejection
-    keywords = {
-        "cook", "recipe", "recipes", "make", "dinner", "lunch", "breakfast", "meal", "meals",
-        "eat", "suggest", "suggestion", "suggestions", "recommend", "recommendation", "recommendations",
-        "prepare", "cooking", "food", "what can i", "whats for", "choose", "anything", "preference",
-        "care", "whatever", "don't want", "dont want", "different", "other options", "something else",
-        "next option", "next options", "different options", "reject", "show me"
-    }
-    
-    import re
-    for kw in keywords:
-        pattern = r'\b' + re.escape(kw) + r'\b'
-        if re.search(pattern, text_lower):
-            return True
-            
-    return False
-
 
 def check_details_intent(messages: List[Any]) -> bool:
     keywords = {"step", "steps", "instruction", "instructions", "detail", "details", "how to make", "how to cook"}
@@ -353,20 +341,51 @@ def check_details_intent(messages: List[Any]) -> bool:
 
 
 def check_inventory_intent(messages: List[Any]) -> bool:
-    keywords = {
-        "bought", "got", "acquired", "used", "cooked", "remove", "add", "inventory", 
-        "stock", "pantry", "fridge", "kitchen", "have", "purchased", "used up", "consume",
-        "run out", "ran out", "finish", "finished", "out of", "no longer", "no more", "none left"
+    # 1. Broad but specific inventory keywords
+    inventory_keywords = {
+        "inventory", "stock", "pantry", "fridge", "cupboard", "cabinet",
+        "purchased", "used up", "consume", "run out", "ran out",
+        "no longer", "no more", "none left"
     }
+    # 2. Specific phrases for showing or asking about inventory
+    phrases = [
+        r"\bdo i have\b",
+        r"\bwhat do i have\b",
+        r"\bwhat ingredients\b",
+        r"\blist my\b",
+        r"\bshow my\b",
+        r"\bwhat's in\b",
+        r"\bwhats in\b",
+        r"\bwhat is in\b",
+        r"\bwhat have i\b"
+    ]
+    # 3. Action verbs indicating inventory changes when referencing food/items
+    actions = {
+        "bought", "got", "acquired", "used", "cooked", "remove", "add", "finish", "finished", "out of"
+    }
+    
     import re
-    # Filter for messages sent by the user, then check the last two
     user_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
     for msg in reversed(user_messages[-2:]):
-        if msg.content:
-            text_lower = msg.content.lower()
-            for kw in keywords:
-                if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
-                    return True
+        if not msg.content:
+            continue
+        text_lower = msg.content.lower()
+        
+        # Check direct keywords
+        for kw in inventory_keywords:
+            if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
+                return True
+                
+        # Check phrases
+        for phrase in phrases:
+            if re.search(phrase, text_lower):
+                return True
+                
+        # Check action verbs
+        for act in actions:
+            if re.search(r'\b' + re.escape(act) + r'\b', text_lower):
+                return True
+                
     return False
 
 
@@ -470,7 +489,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     has_anything = "anything" in wants_list
     wants_empty = len(wants_list) == 0
 
-    latest_has_desire = check_recommendation_desire(latest_user_msg) if latest_user_msg else False
+    latest_has_desire = (state.get("user_intent") == "recipe_recommendation_request")
 
     # Programmatic fallback: if Wants is empty but the user intent indicates recipe desire,
     # check if the user mentioned any known food terms in their message.
@@ -532,28 +551,30 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         # Set asked_preferences to True in DB so that next turn has it as True
         set_user_asked_preferences(state["user_id"], True)
         p["asked_preferences"] = True
-
     # 4. Check if we should bind search.
     #
     # bind_inventory is computed here (earlier than the tool-binding block below) because
     # it is also needed to determine bind_search correctly.
     #
     # The key insight: when wants_str is already set (the extractor captured a preference),
-    # we should bind search_recipes regardless of whether check_recommendation_desire fired.
-    # check_recommendation_desire only guards the case where wants are *empty* (to decide
+    # we should bind search_recipes regardless of whether the user intent is active.
+    # User intent only guards the case where wants are *empty* (to decide
     # whether the agent should ask for preferences or wait). When wants are already populated,
     # the intent to search is implicit — unless the current message is a pure inventory action.
-    #
-    # Example that was broken before this fix:
-    #   User: "I want pasta but not with mushrooms"
-    #   → extractor sets wants="pasta" → wants_empty=False
-    #   → "want" is not in check_recommendation_desire keywords → latest_has_desire=False
-    #   → old formula: bind_search = True and True and False = False  ← BUG: no search bound
-    #   → new formula: bind_search = True and True and (False or True) = True  ← FIXED
     bind_inventory = check_inventory_intent(state["messages"])
-    bind_search = (not wants_empty) and (not has_anything) and (
-        latest_has_desire or not bind_inventory
-    )
+    
+    is_anything_and_asked = has_anything and asked_pref_at_start
+    is_empty_and_asked = wants_empty and asked_pref_at_start
+    
+    if not wants_empty and not has_anything:
+        # Specific preferences exist
+        bind_search = latest_has_desire or not bind_inventory
+    elif (is_anything_and_asked or is_empty_and_asked) and latest_has_desire:
+        # Wants "anything" or is empty, but asked_preferences is True and user wants recommendations
+        bind_search = True
+    else:
+        bind_search = False
+
     # Safety cap: once MAX_SEARCH_CALLS searches have happened in the same turn,
     # force bind_search off so search_recipes cannot be called again.
     # This is a last-resort safeguard — normal flow should terminate earlier
@@ -562,68 +583,12 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         bind_search = False
         print(f"agent_node debug: safety cap reached ({MAX_SEARCH_CALLS} searches) — bind_search forced to False")
 
-    # 5. Programmatic search if Wants contains "anything" or (Wants is empty and asked_preferences was True at the start of the turn)
-    pre_fetched_recipes_str = "None available."
+    # 5. Programmatic search is no longer used. We let the agent call the search_recipes tool.
     rag_recipes = []
-    
-    if (has_anything or (wants_empty and asked_pref_at_start)) and latest_has_desire:
-        # Extract previously suggested recipe IDs (even if empty)
-        import re
-        previously_suggested_ids = set()
-        for msg in state["messages"]:
-            if msg.content:
-                ids = re.findall(r'(?i)\b(?:recipe\s+)?id[:\s]+(\d+)\b', msg.content)
-                for r_id in ids:
-                    previously_suggested_ids.add(int(r_id))
-        
-        compatible_recipe_ids = set(state.get("compatible_recipe_ids", []))
-        forbidden_keywords = [w.strip().lower() for w in not_wants_str.split(",") if w.strip()]
-        
-        recipes_raw = []
-        excluded_ids = previously_suggested_ids.copy()
-        
-        for attempt in range(3):
-            search_pool = compatible_recipe_ids - excluded_ids
-            candidates = recipe_db.search_recipes_filtered(
-                query=None,
-                recipe_ids=search_pool,
-                excluded_ids=excluded_ids,
-                limit=10,
-                culture=None,
-                season=None
-            )
-            if not candidates:
-                break
-                
-            viable_in_this_run = []
-            for r in candidates:
-                has_forbidden = False
-                for forbidden in forbidden_keywords:
-                    ingredients_str = " ".join(r.get("ingredients", [])).lower()
-                    if forbidden in ingredients_str or forbidden in r.get("name", "").lower():
-                        has_forbidden = True
-                        excluded_ids.add(r["id"])
-                        break
-                if not has_forbidden:
-                    viable_in_this_run.append(r)
-            
-            if viable_in_this_run:
-                recipes_raw = viable_in_this_run[:3]
-                break
-            # Continue search loop if 0 viable recipes
-            
-        rag_recipes = recipes_raw
-        if recipes_raw:
-            pre_fetched_recipes_str = format_recipe_results(
-                recipes_raw,
-                user_ingredients=p["ingredients"]
-            )
-        else:
-            pre_fetched_recipes_str = "No compatible recipes found."
 
     # 6. Determine tool bindings dynamically to prevent hallucinations:
-    # - If Wants is empty and user is asking for recommendations, bind no tools
-    #   (forces the agent to ask for preferences instead of picking a random recipe).
+    # - If Wants is empty, user is asking for recommendations, and asked_preferences is False,
+    #   bind no tools (forces the agent to ask for preferences instead of picking a random recipe).
     # - Otherwise, bind search_recipes if bind_search is True, inventory tools if
     #   inventory intent is detected, and get_recipe_details_tool only when recipe
     #   IDs have already been shown in the conversation (prevents random ID calls).
@@ -638,7 +603,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         for msg in state["messages"]
     )
     
-    if wants_empty and latest_has_desire:
+    if wants_empty and latest_has_desire and not asked_pref_at_start:
         tools = []
         # If recipe IDs have been shown, they might be asking for details/cooking steps of one of them.
         # We must bind get_recipe_details_tool in this case so the agent can retrieve them.
@@ -713,7 +678,6 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             restrictions=restrictions_str,
             wants_temporary=wants_str if wants_str else "None",
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
-            pre_fetched_recipes=pre_fetched_recipes_str,
             asked_preferences=str(asked_pref_at_start),
             recent_memory_updates=recent_updates_str,
             cross_check_section=cross_check_section,
@@ -758,7 +722,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         has_use = any(re.search(r'\b' + re.escape(kw) + r'\b', latest_user_msg_lower) for kw in use_keywords)
         has_run_out = any(re.search(r'\b' + re.escape(kw) + r'\b', latest_user_msg_lower) for kw in run_out_keywords)
         
-        is_recipe_request = check_recommendation_desire(latest_user_msg)
+        is_recipe_request = (state.get("user_intent") == "recipe_recommendation_request")
         is_checking_inventory = any(kw in latest_user_msg_lower for kw in ["do i have", "what do i have", "what ingredients", "list my", "show my"])
         
         # Also check if LLM generated response contains explanations that they still have it
