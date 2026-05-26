@@ -172,6 +172,7 @@ def format_recipe_results(
             f"Recipe ID: {r['id']}\n"
             f"Name: {r['name']}\n"
             f"Cook Time: {r['minutes']} mins\n"
+            f"Ingredients: {', '.join(r.get('ingredients', []))}\n"
         )
         if missing:
             recipe_str += f"Missing Ingredients: {', '.join(missing)}\n"

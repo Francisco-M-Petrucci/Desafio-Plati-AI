@@ -479,10 +479,35 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         known_terms = _get_known_food_terms()
         extracted_wants = []
         import re
-        words_in_msg = re.findall(r'\b[a-zA-Z]{3,}\b', latest_user_msg.lower())
-        for word in words_in_msg:
-            if word in known_terms:
-                extracted_wants.append(word)
+        
+        # Split user message by word boundary, keeping apostrophes for words like don't
+        words_in_msg = re.findall(r"\b[a-zA-Z']{3,}\b", latest_user_msg.lower())
+        
+        # Build sets of temporary and permanent dislikes to filter out
+        not_wants_list = [nw.strip().lower() for nw in not_wants_str.split(",") if nw.strip()]
+        disliked_terms = set(not_wants_list)
+        
+        # Add permanent dislikes (e.g. from facts like "dislikes fish")
+        for fact in p.get("facts", []):
+            fact_lower = fact.lower()
+            if any(neg in fact_lower for neg in ["dislike", "hate", "allergic", "avoid"]):
+                for term in known_terms:
+                    if term in fact_lower:
+                        disliked_terms.add(term)
+                        
+        negation_words = {"no", "not", "without", "avoid", "dont", "don't", "hate", "dislike", "dislikes", "hates", "never"}
+        
+        for i, word in enumerate(words_in_msg):
+            word_clean = word.replace("'", "") # standardize
+            if word_clean in known_terms and word_clean not in disliked_terms:
+                # Check for negation in preceding 3 words
+                is_negated = False
+                for prev_word in words_in_msg[max(0, i-3):i]:
+                    if prev_word in negation_words:
+                        is_negated = True
+                        break
+                if not is_negated:
+                    extracted_wants.append(word_clean)
         
         if extracted_wants:
             # Deduplicate while preserving order

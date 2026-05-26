@@ -142,6 +142,7 @@ Extract NEW facts, permanent facts to remove/correct, or temporary preferences f
 4. "does_not_want_temporary": Simple nouns/adjectives the user explicitly rejects for this meal.
 
 # Constraints
+- Cooking fact formatting: When adding cooking-related facts (ingredients, tastes, cuisines, seasonings, food textures, etc.) to permanent_facts, you MUST explicitly specify if the user's disposition is positive or negative (e.g., "likes fish dishes" or "dislikes fish dishes", NOT just "fish dishes"). Non-cooking facts (e.g., "User has dentures") do not require a stated preference.
 - Save ONLY simple words or phrases in temporary preferences. No full sentences.
 - Exclude dietary restrictions and allergies: Do NOT extract any allergies, intolerances, or dietary restrictions (e.g. gluten-free, vegan, lactose intolerance, peanut allergy) to permanent_facts. These are managed exclusively by the user directly in their profile settings.
 - Asked Preferences status: {asked_preferences}
