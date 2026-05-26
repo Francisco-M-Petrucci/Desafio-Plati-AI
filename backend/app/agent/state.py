@@ -21,3 +21,7 @@ class AgentState(TypedDict):
     
     # Internal log of actions (e.g. "updated ingredients: +2 salt")
     actions: List[str]
+    
+    # Memory updates tracked in this turn (e.g. {"added": [...], "removed": [...]})
+    recent_memory_updates: Dict[str, List[str]]
+

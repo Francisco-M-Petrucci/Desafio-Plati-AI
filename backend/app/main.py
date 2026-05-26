@@ -388,7 +388,8 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depe
             "user_profile": profile_data,
             "compatible_recipe_ids": [],
             "rag_recipes": [],
-            "actions": []
+            "actions": [],
+            "recent_memory_updates": {"added": [], "removed": []}
         }
         
         result = agent_graph.invoke(initial_state)
