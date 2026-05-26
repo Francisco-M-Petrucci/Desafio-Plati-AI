@@ -374,6 +374,29 @@ def add_user_fact_to_db(user_id: int, fact: str) -> str:
         db.close()
 
 
+def remove_user_fact_from_db(user_id: int, fact: str) -> str:
+    """Removes a long-term fact about the user from the database."""
+    db = SessionLocal()
+    try:
+        fact_stripped = fact.strip().lower()
+        existing_facts = db.query(UserFact).filter(UserFact.user_id == user_id).all()
+        removed = False
+        for f in existing_facts:
+            if f.fact.strip().lower() == fact_stripped:
+                db.delete(f)
+                removed = True
+        if removed:
+            db.commit()
+            return f"Removed fact: '{fact}'"
+        return "Fact not found in profile."
+    except Exception as e:
+        db.rollback()
+        return f"Error removing fact: {str(e)}"
+    finally:
+        db.close()
+
+
+
 def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wants: List[str]) -> str:
     """Saves and merges new temporary wants and does_not_wants to the database, preventing duplicates and conflicts."""
     db = SessionLocal()

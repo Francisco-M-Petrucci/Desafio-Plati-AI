@@ -13,6 +13,7 @@ from app.agent.tools import (
     get_user_profile_data,
     update_ingredients_in_db,
     add_user_fact_to_db,
+    remove_user_fact_from_db,
     save_temporary_preferences_to_db,
     get_filtered_recipe_ids,
     format_recipe_results,
@@ -37,7 +38,7 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
                     model="llama-3.3-70b-versatile",
                     api_key=groq_key,
                     base_url="https://api.groq.com/openai/v1",
-                    temperature=0.2,
+                    temperature=0.0,
                     max_retries=5
                 )
             return _llm_instance_70b
@@ -47,7 +48,7 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
                     model="llama-3.1-8b-instant",
                     api_key=groq_key,
                     base_url="https://api.groq.com/openai/v1",
-                    temperature=0.2,
+                    temperature=0.0,
                     max_retries=5
                 )
             return _llm_instance_8b
@@ -62,7 +63,7 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
                 model=model_name,
                 api_key=nvidia_key,
                 base_url="https://integrate.api.nvidia.com/v1",
-                temperature=0.2,
+                temperature=0.0,
                 max_retries=5
             )
         return _llm_instance_70b
@@ -76,7 +77,7 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
                 model=model_name,
                 api_key=nvidia_key,
                 base_url="https://integrate.api.nvidia.com/v1",
-                temperature=0.2,
+                temperature=0.0,
                 max_retries=5
             )
         return _llm_instance_8b
@@ -87,7 +88,7 @@ def get_llm(model_name: str = "meta/llama-3.1-70b-instruct") -> ChatOpenAI:
             model=model_name,
             api_key=nvidia_key,
             base_url="https://integrate.api.nvidia.com/v1",
-            temperature=0.2,
+            temperature=0.0,
             max_retries=5
         )
 
@@ -211,12 +212,18 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         parsed = json.loads(content)
         user_id = state["user_id"]
 
-        # 4. Save extracted facts
+        # 4. Save/remove extracted facts
         saved_facts = []
         for fact in parsed.get("permanent_facts", []):
             res = add_user_fact_to_db(user_id, fact)
             if "Saved fact" in res:
                 saved_facts.append(fact)
+                
+        removed_facts = []
+        for fact in parsed.get("permanent_facts_to_remove", []):
+            res = remove_user_fact_from_db(user_id, fact)
+            if "Removed fact" in res:
+                removed_facts.append(fact)
                 
         # Save extracted temporary preferences
         wants = parsed.get("wants_temporary", [])
@@ -232,13 +239,21 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
 
         if saved_facts:
             print(f"Extracted memory - Saved facts: {saved_facts}")
+        if removed_facts:
+            print(f"Extracted memory - Removed facts: {removed_facts}")
             
     except Exception as e:
+        saved_facts = []
+        removed_facts = []
         print(f"Error in extract_preferences_node: {e}")
 
     # 5. Reload user profile to ensure state contains the newly saved facts/preferences
     profile = get_user_profile_data(state["user_id"])
-    return {"user_profile": profile}
+    return {
+        "user_profile": profile,
+        "recent_memory_updates": {"added": saved_facts, "removed": removed_facts}
+    }
+
 
 
 def pre_filter_node(state: AgentState) -> Dict[str, Any]:
@@ -320,6 +335,21 @@ def check_recommendation_desire(text: str) -> bool:
             
     return False
 
+
+def check_details_intent(messages: List[Any]) -> bool:
+    keywords = {"step", "steps", "instruction", "instructions", "detail", "details", "how to make", "how to cook"}
+    import re
+    if messages:
+        msg = messages[-1]
+        if msg.content:
+            text_lower = msg.content.lower()
+            if any(re.search(r'\b' + re.escape(kw) + r'\b', text_lower) for kw in keywords):
+                return True
+            if re.search(r'\b\d+\b', text_lower):
+                return True
+    return False
+
+
 def check_inventory_intent(messages: List[Any]) -> bool:
     keywords = {
         "bought", "got", "acquired", "used", "cooked", "remove", "add", "inventory", 
@@ -340,7 +370,7 @@ def check_inventory_intent(messages: List[Any]) -> bool:
 def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
     """Parse a Groq tool_use_failed error to recover the intended tool call.
     
-    When Llama 3.3 70B generates tool calls in the raw <function=name {json}</function>
+    When Llama 3.1/3.3 70B generates tool calls in the raw <function=name {json}</function>
     format instead of the structured API format, Groq rejects it with a tool_use_failed
     error. This function extracts the intended function name and arguments so we can
     recover gracefully.
@@ -350,6 +380,7 @@ def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
     """
     import re
     import uuid
+    import json
     
     failed_gen = None
     
@@ -373,7 +404,7 @@ def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
         return None
     
     # Parse the <function=name ...></function> pattern
-    # Llama 3.3 might omit the space between the function name and the JSON arguments.
+    # Llama might omit the space between the function name and the JSON arguments.
     match = re.search(r'<function=(\w+)\s*(\{.*?\})\s*</function>', failed_gen, re.DOTALL)
     if not match:
         return None
@@ -451,7 +482,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         p["asked_preferences"] = True
 
     # 4. Check if we should bind search
-    bind_search = (not wants_empty) and (not has_anything)
+    bind_search = (not wants_empty) and (not has_anything) and latest_has_desire
 
     # 5. Programmatic search if Wants contains "anything" or (Wants is empty and asked_preferences was True at the start of the turn)
     pre_fetched_recipes_str = "None available."
@@ -519,6 +550,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     #   inventory intent is detected, and get_recipe_details_tool only when recipe
     #   IDs have already been shown in the conversation (prevents random ID calls).
     bind_inventory = check_inventory_intent(state["messages"])
+    bind_details = check_details_intent(state["messages"])
     
     # Check if any recipe IDs have been shown in prior messages so the user has
     # concrete recipes to reference. Matches both raw ("Recipe ID: <num>") and minified ("(ID: <num>)") formats.
@@ -552,6 +584,26 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
     restrictions_str = ", ".join(p["restrictions"]) if p.get("restrictions") else "None"
 
+    # Format recent memory updates if present
+    recent_updates = state.get("recent_memory_updates", {})
+    added = recent_updates.get("added", [])
+    removed = recent_updates.get("removed", [])
+    
+    # Show memory updates in the system prompt if we are in a conversational run
+    # (either we just executed a tool, or search_recipes is not bound).
+    # This prevents the LLM from outputting conversational acknowledgement text
+    # at the same time as a tool call, which causes provider validation crashes.
+    has_tool_message = isinstance(state["messages"][-1], ToolMessage)
+    show_updates = has_tool_message or (not tools)
+    
+    recent_updates_str = ""
+    if show_updates and (added or removed):
+        recent_updates_str = "\nRecent Memory Updates:"
+        if added:
+            recent_updates_str += "\n- Added: " + ", ".join(f'"{f}"' for f in added)
+        if removed:
+            recent_updates_str += "\n- Removed: " + ", ".join(f'"{f}"' for f in removed)
+
     prompt_template = SYSTEM_PROMPT_WITH_SEARCH if bind_search else SYSTEM_PROMPT_WITHOUT_SEARCH
     sys_message = SystemMessage(
         content=prompt_template.format(
@@ -561,7 +613,8 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             wants_temporary=wants_str if wants_str else "None",
             does_not_want_temporary=not_wants_str if not_wants_str else "None",
             pre_fetched_recipes=pre_fetched_recipes_str,
-            asked_preferences=str(asked_pref_at_start)
+            asked_preferences=str(asked_pref_at_start),
+            recent_memory_updates=recent_updates_str
         )
     )
 
@@ -575,11 +628,10 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     try:
         response = llm_with_tools.invoke(history)
     except Exception as e:
-        # Handle Groq tool_use_failed: Llama 3.3 sometimes generates tool calls in raw
+        # Handle Groq/Nvidia NIM tool_use_failed: Llama sometimes generates tool calls in raw
         # <function=name {json}</function> format instead of using the structured API.
-        # Recover by parsing the intended call from the error (checks .body, .__cause__, and str).
+        # Recover by parsing the intended call from the error.
         parsed_call = _parse_failed_tool_call(e)
-        
         if parsed_call:
             response = AIMessage(content="", tool_calls=[parsed_call])
             print(f"Recovered from tool_use_failed: parsed tool call '{parsed_call['name']}'")
@@ -636,6 +688,10 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     output = {"messages": [response]}
     if rag_recipes:
         output["rag_recipes"] = rag_recipes
+        
+    # Reset recent_memory_updates if this is the final conversational run (no tool calls generated)
+    if not response.tool_calls:
+        output["recent_memory_updates"] = {"added": [], "removed": []}
         
     return output
 
@@ -742,9 +798,14 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                 previously_suggested_ids.add(int(r_id))
     print(f"Previously suggested recipe IDs to exclude: {previously_suggested_ids}")
 
+    # Check if there are active memory updates in this turn
+    recent_updates = state.get("recent_memory_updates", {})
+    has_memory_updates = bool(recent_updates.get("added") or recent_updates.get("removed"))
+
     # Determine if we can short-circuit this turn
     short_circuit_replies = []
-    can_short_circuit = True
+    can_short_circuit = not has_memory_updates
+
 
     for tool_call in last_msg.tool_calls:
         name = tool_call["name"]
