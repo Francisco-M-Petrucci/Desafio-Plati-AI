@@ -126,7 +126,9 @@ class RecipeVectorDB:
                     "required_appliances": json.loads(meta.get("required_appliances", "[]")),
                     "cuisine_type": meta.get("cuisine_type", ""),
                     "dietary_tags": json.loads(meta.get("dietary_tags", "[]")),
-                    "ingredients": json.loads(meta.get("ingredients", "[]"))
+                    "ingredients": json.loads(meta.get("ingredients", "[]")),
+                    "tags": json.loads(meta.get("tags", "[]")),
+                    "description": meta.get("description", "")
                 })
 
             self._metadata_cache = recipes
@@ -160,12 +162,59 @@ class RecipeVectorDB:
             print(f"Error fetching recipe by ID {recipe_id}: {e}")
         return None
 
+    def _lexical_search(self, query: str, recipe_id_set: Set[int]) -> Dict[int, float]:
+        """
+        Simple keyword-based scoring for recipes to act as Sparse Search.
+        Returns a dict of {recipe_id: score}.
+        """
+        import re
+        scores = {}
+        all_meta = self.get_all_recipe_metadata()
+        
+        # Tokenize query into lowercase words (3+ chars)
+        query_words = [w.lower() for w in re.findall(r'\b\w{3,}\b', query)]
+        if not query_words:
+            return scores
+            
+        for meta in all_meta:
+            r_id = meta.get("id")
+            if r_id not in recipe_id_set:
+                continue
+                
+            score = 0.0
+            name = meta.get("name", "").lower()
+            ingredients = " ".join(meta.get("ingredients", [])).lower()
+            tags = " ".join(meta.get("tags", [])).lower()
+            
+            for word in query_words:
+                word_escaped = re.escape(word)
+                # High boost for exact word match in name
+                if re.search(r'\b' + word_escaped + r'\b', name):
+                    score += 10.0
+                elif word in name:
+                    score += 2.0
+                    
+                # Medium boost for exact word match in ingredients
+                if re.search(r'\b' + word_escaped + r'\b', ingredients):
+                    score += 5.0
+                elif word in ingredients:
+                    score += 1.0
+                    
+                # Small boost for tags
+                if re.search(r'\b' + word_escaped + r'\b', tags):
+                    score += 2.0
+                    
+            if score > 0:
+                scores[r_id] = score
+                
+        return scores
+
     def search_recipes_filtered(
         self,
         query: Optional[str] = None,
         recipe_ids: Set[int] = None,
         excluded_ids: Optional[Set[int]] = None,
-        limit: int = 3,
+        limit: int = 5,
         culture: Optional[str] = None,
         season: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -209,43 +258,79 @@ class RecipeVectorDB:
                     break
             return processed_results
 
-        results = self.vector_store.similarity_search(query, k=100)
+        results_dense = self.vector_store.similarity_search_with_score(query, k=100)
 
-        processed_results = []
-        for doc in results:
-            meta = doc.metadata
-            recipe_id = meta.get("id")
-
-            # Filter by allowed IDs (the pre-filtered compatible set)
-            if recipe_id not in recipe_id_set:
+        # 1. Calculate Dense Ranks
+        dense_rank = {}
+        current_rank = 1
+        for doc, _ in results_dense:
+            r_id = doc.metadata.get("id")
+            if r_id not in recipe_id_set:
                 continue
-
-            # Filter by cuisine type (uses the new structured field, not tags)
+                
+            # Filter by culture and season
+            if culture:
+                recipe_cuisine = doc.metadata.get("cuisine_type", "")
+                if culture.lower() != recipe_cuisine.lower():
+                    continue
+            if season:
+                tags = json.loads(doc.metadata.get("tags", "[]"))
+                if season.lower() not in [t.lower() for t in tags]:
+                    continue
+                    
+            if r_id not in dense_rank:
+                dense_rank[r_id] = current_rank
+                current_rank += 1
+                
+        # 2. Calculate Sparse Ranks
+        lexical_scores = self._lexical_search(query, recipe_id_set)
+        
+        # Filter lexical matches by culture and season before ranking
+        filtered_lexical_scores = {}
+        all_meta = {m["id"]: m for m in self.get_all_recipe_metadata()}
+        
+        for r_id, score in lexical_scores.items():
+            meta = all_meta.get(r_id)
+            if not meta:
+                continue
             if culture:
                 recipe_cuisine = meta.get("cuisine_type", "")
                 if culture.lower() != recipe_cuisine.lower():
                     continue
-
-            # Filter by season (still uses tags since season is not a separate field)
             if season:
-                tags = json.loads(meta.get("tags", "[]"))
+                tags = json.loads(meta.get("tags", "[]")) if isinstance(meta.get("tags"), str) else meta.get("tags", [])
                 if season.lower() not in [t.lower() for t in tags]:
                     continue
-
-            ingredients = json.loads(meta.get("ingredients", "[]"))
-            steps = json.loads(meta.get("steps", "[]"))
-            tags = json.loads(meta.get("tags", "[]"))
-
-            processed_results.append({
-                "id": recipe_id,
-                "name": meta.get("name"),
-                "minutes": meta.get("minutes"),
-                "ingredients": ingredients,
-                "steps": steps,
-                "tags": tags,
-                "description": meta.get("description")
-            })
-
+            filtered_lexical_scores[r_id] = score
+            
+        # Sort sparse scores descending
+        sorted_sparse = sorted(filtered_lexical_scores.items(), key=lambda x: x[1], reverse=True)
+        sparse_rank = {r_id: rank + 1 for rank, (r_id, _) in enumerate(sorted_sparse)}
+        
+        # 3. Reciprocal Rank Fusion (RRF)
+        rrf_k = 60
+        combined_scores = {}
+        
+        # Union of all valid recipe IDs from both methods
+        all_valid_ids = set(dense_rank.keys()) | set(sparse_rank.keys())
+        
+        for r_id in all_valid_ids:
+            score = 0.0
+            if r_id in dense_rank:
+                score += 1.0 / (rrf_k + dense_rank[r_id])
+            if r_id in sparse_rank:
+                score += 1.0 / (rrf_k + sparse_rank[r_id])
+            combined_scores[r_id] = score
+            
+        # 4. Sort by RRF score descending
+        sorted_final = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
+        
+        # 5. Fetch full recipe details for the top `limit` results
+        processed_results = []
+        for r_id, _ in sorted_final:
+            recipe_full = self.get_recipe_by_id(r_id)
+            if recipe_full:
+                processed_results.append(recipe_full)
             if len(processed_results) >= limit:
                 break
 
@@ -254,7 +339,7 @@ class RecipeVectorDB:
     def search_recipes(
         self,
         query: str,
-        limit: int = 3,
+        limit: int = 5,
         culture: Optional[str] = None,
         season: Optional[str] = None
     ) -> List[Dict[str, Any]]:
