@@ -33,8 +33,12 @@ function App() {
   // Fetch user profile whenever user changes
   useEffect(() => {
     if (user) {
+      if (user.access_token) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${user.access_token}`;
+      }
       fetchProfile();
     } else {
+      delete axios.defaults.headers.common['Authorization'];
       setProfile({
         ingredients: [],
         appliances: [],

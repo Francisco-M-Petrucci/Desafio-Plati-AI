@@ -4,8 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+import time
+from app.auth import get_password_hash, verify_password, create_access_token, get_current_user
 
 load_dotenv()
 
@@ -95,11 +97,19 @@ app = FastAPI(title="Recipe Companion API")
 # Enable CORS for frontend connection
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+RATE_LIMIT_DB = {}
+def check_rate_limit(user_id: int):
+    now = time.time()
+    last_req = RATE_LIMIT_DB.get(user_id, 0)
+    if now - last_req < 1.0:
+        raise HTTPException(status_code=429, detail="Too many requests. Please wait a moment.")
+    RATE_LIMIT_DB[user_id] = now
 
 # Initialize vector DB connection
 recipe_vector_db = RecipeVectorDB()
@@ -111,7 +121,7 @@ class LoginRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     user_id: int
-    message: str
+    message: str = Field(..., max_length=2000)
 
 class ApplianceUpdate(BaseModel):
     appliances: List[str]
@@ -192,10 +202,16 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Account not found. Please register first.")
         
-    if user.password != req.password:
-        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
-        
-    return {"user_id": user.id, "username": user.username}
+    if not verify_password(req.password, user.password):
+        # Fallback for plain text passwords for Alice and Bob
+        if user.password == req.password and username in ["alice", "bob", "carlos"]:
+            user.password = get_password_hash(req.password)
+            db.commit()
+        else:
+            raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
+            
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer"}
 
 
 @app.post("/api/auth/register")
@@ -209,11 +225,12 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
         
-    # Create new User
+    # Create new User with hashed password
+    hashed_password = get_password_hash(req.password)
     user = User(
         first_name=req.first_name.strip(),
         username=username,
-        password=req.password,
+        password=hashed_password,
         asked_preferences=False
     )
     db.add(user)
@@ -289,12 +306,15 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error during registration recipe search: {e}")
         
-    return {"user_id": user.id, "username": user.username}
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/api/users/{user_id}/initial-search")
-def get_initial_search(user_id: int, db: Session = Depends(get_db)):
+def get_initial_search(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Retrieve full details of the 5 recipes matched during registration."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -311,8 +331,10 @@ def get_initial_search(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/users/{user_id}/profile")
-def get_profile(user_id: int, db: Session = Depends(get_db)):
+def get_profile(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Retrieve full kitchen inventory, appliances, restrictions, and facts."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     check_and_trigger_cleanup(user_id, db)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -323,8 +345,10 @@ def get_profile(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/users/{user_id}/appliances")
-def update_appliances(user_id: int, req: ApplianceUpdate, db: Session = Depends(get_db)):
+def update_appliances(user_id: int, req: ApplianceUpdate, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Overwrite the user's available appliances."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -342,8 +366,10 @@ def update_appliances(user_id: int, req: ApplianceUpdate, db: Session = Depends(
 
 
 @app.post("/api/users/{user_id}/ingredients")
-def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depends(get_db)):
+def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Overwrite the user's ingredients inventory."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -368,8 +394,10 @@ def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depend
 
 
 @app.post("/api/users/{user_id}/ingredients/add-all-kb")
-def add_all_kb_ingredients(user_id: int, db: Session = Depends(get_db)):
+def add_all_kb_ingredients(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Add all ingredients from the knowledge base to the user's inventory."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -406,8 +434,10 @@ def add_all_kb_ingredients(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/users/{user_id}/restrictions")
-def update_restrictions(user_id: int, req: RestrictionUpdate, db: Session = Depends(get_db)):
+def update_restrictions(user_id: int, req: RestrictionUpdate, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Overwrite the user's dietary restrictions."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -425,8 +455,11 @@ def update_restrictions(user_id: int, req: RestrictionUpdate, db: Session = Depe
 
 
 @app.post("/api/chat")
-def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Exposes chat agent endpoint, loading history, running graph, and saving history."""
+    if req.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    check_rate_limit(req.user_id)
     check_and_trigger_cleanup(req.user_id, db)
     user = db.query(User).filter(User.id == req.user_id).first()
     if not user:
@@ -506,12 +539,24 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depe
 async def upload_receipt(
     user_id: int = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user)
 ):
     """
     Upload a receipt image. Calls Nvidia Vision model (or mock fallback)
     to parse ingredients and return them.
     """
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    check_rate_limit(user_id)
+    
+    # File validation
+    if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, and WebP are allowed.")
+        
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:  # 10 MB limit
+        raise HTTPException(status_code=400, detail="File too large (max 10MB).")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -541,8 +586,10 @@ def list_recipes(
 
 
 @app.get("/api/users/{user_id}/chat-history")
-def get_chat_history(user_id: int, db: Session = Depends(get_db)):
+def get_chat_history(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Fetch all database saved messages for UI reload."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     check_and_trigger_cleanup(user_id, db)
     msgs = db.query(ChatMessage).filter(
         ChatMessage.user_id == user_id
@@ -552,8 +599,10 @@ def get_chat_history(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/users/{user_id}/chat-history")
-def clear_chat_history(user_id: int, db: Session = Depends(get_db)):
+def clear_chat_history(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Clear chat messages history and session state."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete()
     user = db.query(User).filter(User.id == user_id).first()
     if user:
@@ -565,8 +614,10 @@ def clear_chat_history(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/users/{user_id}/temporary-preferences")
-def update_temporary_preferences(user_id: int, req: TemporaryPreferencesUpdate, db: Session = Depends(get_db)):
+def update_temporary_preferences(user_id: int, req: TemporaryPreferencesUpdate, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Update wants_temporary and does_not_want_temporary fields for a user."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -582,8 +633,10 @@ def update_temporary_preferences(user_id: int, req: TemporaryPreferencesUpdate, 
 
 
 @app.delete("/api/users/{user_id}/temporary-preferences")
-def clear_temporary_preferences(user_id: int, db: Session = Depends(get_db)):
+def clear_temporary_preferences(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Clear AI short term memory temporary preferences."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     user = db.query(User).filter(User.id == user_id).first()
     if user:
         user.wants_temporary = ""
@@ -594,8 +647,10 @@ def clear_temporary_preferences(user_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/users/{user_id}/facts")
-def clear_user_facts(user_id: int, db: Session = Depends(get_db)):
+def clear_user_facts(user_id: int, db: Session = Depends(get_db), current_user_id: int = Depends(get_current_user)):
     """Clear AI long term memory facts."""
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
     db.query(UserFact).filter(UserFact.user_id == user_id).delete()
     db.commit()
     return {"status": "success", "message": "AI long term memory cleared."}

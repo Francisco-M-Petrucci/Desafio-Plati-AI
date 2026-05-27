@@ -322,7 +322,7 @@ def update_ingredients_in_db(user_id: int, action: str, items: Any) -> str:
                 name = item_dict.get("name", "").strip().lower()
 
             name = standardize_ingredient(name)
-            if not name:
+            if not name or len(name) > 100:
                 continue
 
             # Find existing ingredient
