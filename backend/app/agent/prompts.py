@@ -35,7 +35,7 @@ _RECIPES_WITH_SEARCH = """# Recipes
 - If recipe desire expressed:
   - Wants empty + Asked Preferences False → ask {username} what they'd like. No tool call.
   - Wants empty + Asked Preferences True → `search_recipes(query="")`.
-  - Wants is "anything" → `search_recipes(query="")`.
+  - Wants is only "anything" → `search_recipes(query="")`.
   - Wants has preference (unless search results already returned—follow Cross-Check) → `search_recipes(query=<preference>)`.
 - If user is stating facts, updating inventory, asking cooking tips, or unrelated questions → do NOT suggest recipes or ask preferences.
 - Cooking steps request → `get_recipe_details_tool(recipe_id=ID)`.
@@ -43,20 +43,20 @@ _RECIPES_WITH_SEARCH = """# Recipes
 - Restriction conflict → warmly note it doesn't match their dietary profile; mention they can update restrictions on **My Kitchen**.
 - Recipe format:
   **[RECIPE NAME]** — [Cook time] mins
-  • Missing ingredients: [list] (only if any exist)
+  • Missing ingredients: [list ONLY the ingredients missing from the user's inventory. Write "None" if they have all ingredients]
 {cross_check_section}"""
 
 _RECIPES_WITHOUT_SEARCH = """# Recipes (search_recipes unavailable this turn)
 - Only suggest recipes if the user explicitly asks for recommendations or what to cook/make/eat.
 - If recipe desire expressed:
   - Wants empty + Asked Preferences False → ask {username} what they'd like. No tool call.
-  - Wants empty + Asked Preferences True, OR Wants is "anything" → inform {username} warmly that no matching recipes were found or candidates are exhausted.
+  - Wants empty + Asked Preferences True, OR Wants is only "anything" → inform {username} warmly that no matching recipes were found or candidates are exhausted.
 - If user is stating facts, updating inventory, asking cooking tips, or unrelated questions → do NOT suggest recipes or ask preferences.
 - Cooking steps request → `get_recipe_details_tool(recipe_id=ID)`.
 - Restriction conflict → warmly note it doesn't match their dietary profile; mention they can update restrictions on **My Kitchen**.
 - Recipe format:
   **[RECIPE NAME]** — [Cook time] mins
-  • Missing ingredients: [list] (only if any exist)
+  • Missing ingredients: [list ONLY the ingredients missing from the user's inventory. Write "None" if they have all ingredients]
 {cross_check_section}"""
 
 _RECIPES_POST_SEARCH = """# Recipes (Post-Search)
@@ -66,7 +66,7 @@ _RECIPES_POST_SEARCH = """# Recipes (Post-Search)
 - Cooking steps request → `get_recipe_details_tool(recipe_id=ID)`.
 - Recipe format:
   **[RECIPE NAME]** — [Cook time] mins
-  • Missing ingredients: [list] (only if any exist)
+  • Missing ingredients: [list ONLY the ingredients missing from the user's inventory. Write "None" if they have all ingredients]
 {cross_check_section}"""
 
 # ── Profile header (shared) ──────────────────────────────────────────────────
@@ -123,14 +123,14 @@ Extract NEW facts, facts to remove, temporary preferences, and user intent from 
 # Categories
 1. "permanent_facts": Long-term info (likes, dislikes, habits, cooking preferences). Exclude appliances, restrictions, allergies.
 2. "permanent_facts_to_remove": Facts from "Existing facts" the user wants forgotten/removed/corrected.
-3. "wants_temporary": Simple nouns/adjectives the user wants for this meal.
-4. "does_not_want_temporary": Simple nouns/adjectives the user rejects for this meal.
+3. "wants_temporary": Simple nouns/adjectives related to food, ingredients, cuisines, or flavor profiles the user wants for this meal.
+4. "does_not_want_temporary": Simple nouns/adjectives related to food, ingredients, cuisines, or flavor profiles the user rejects for this meal.
 5. "user_intents": All applicable tags as JSON array:
    - "recipe_recommendation_request": Asking for recipe suggestions or what to cook/make/eat.
    - "update_inventory": Bought, acquired, ran out of, finished, or removed inventory items.
    - "retrieve_inventory": Asking to list/show/check what they have in stock.
    - "recipe_details_request": Asking for cooking steps, instructions, or details of a specific recipe.
-   - "general_chat": Stating preferences/facts, general culinary questions, greetings, or anything not above.
+   - "general_chat": Stating preferences/facts, general culinary questions, greetings, or anything not already handled by the tags above.
 
 # Constraints
 - Cooking facts: MUST specify positive/negative disposition (e.g., "likes fish" not just "fish"). Non-cooking facts (e.g., "has dentures") need no preference.

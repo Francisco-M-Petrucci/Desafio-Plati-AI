@@ -444,7 +444,7 @@ def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
     
     # Parse the <function=name ...></function> pattern
     # Llama might omit the space between the function name and the JSON arguments.
-    match = re.search(r'<function=(\w+)\s*(\{.*?\})\s*</function>', failed_gen, re.DOTALL)
+    match = re.search(r'<function=(\w+)\s*(\{.*?\})\s*>?\s*</function>', failed_gen, re.DOTALL)
     if not match:
         return None
     

@@ -178,6 +178,8 @@ def format_recipe_results(
         )
         if missing:
             recipe_str += f"Missing Ingredients: {', '.join(missing)}\n"
+        else:
+            recipe_str += "Missing Ingredients: None\n"
 
         formatted.append(recipe_str.strip())
     return "\n---\n".join(formatted)
@@ -414,6 +416,13 @@ def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wa
 
         existing_wants_lower = [w.lower() for w in existing_wants]
         existing_not_wants_lower = [n.lower() for n in existing_not_wants]
+
+        # If adding specific wants, remove 'anything' from existing wants
+        if any(w.strip().lower() != "anything" for w in wants):
+            while "anything" in existing_wants_lower:
+                idx = existing_wants_lower.index("anything")
+                existing_wants.pop(idx)
+                existing_wants_lower.pop(idx)
 
         # Merge wants (remove from does_not_want if there's a conflict)
         new_wants = []
