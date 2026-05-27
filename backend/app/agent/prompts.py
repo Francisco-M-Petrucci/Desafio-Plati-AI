@@ -194,4 +194,5 @@ Order the remaining recipes so the one that best matches {username}'s known pref
 - If **at least one recipe survives** Steps 1 and 2: present the survivors immediately. You are STRICTLY PROHIBITED from calling `search_recipes` again. Doing so will violate constraints.
 - If **zero recipes survive** AND this is search attempt {search_calls_this_turn} of {max_search_calls}: call `search_recipes` again with the same query — already-retrieved recipe IDs are automatically excluded so you will receive fresh candidates.
 - If **zero recipes survive** AND you are on the final attempt ({search_calls_this_turn} == {max_search_calls}): present the closest available option with a brief note that it may not be a perfect fit.
+- CRITICAL: Do NOT call `get_recipe_details_tool` during this phase. You must present the list of recipes to the user first. Only use `get_recipe_details_tool` if the user explicitly asks for cooking steps.
 """

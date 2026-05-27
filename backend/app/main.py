@@ -202,13 +202,22 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Account not found. Please register first.")
         
-    if not verify_password(req.password, user.password):
-        # Fallback for plain text passwords for Alice and Bob
-        if user.password == req.password and username in ["alice", "bob", "carlos"]:
-            user.password = get_password_hash(req.password)
-            db.commit()
+    # Allow plaintext login for test accounts
+    if username in ["alice", "bob", "carlos"]:
+        if user.password == req.password:
+            access_token = create_access_token(data={"sub": str(user.id)})
+            return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer"}
         else:
             raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
+            
+    # For normal accounts, use bcrypt verification
+    try:
+        is_valid = verify_password(req.password, user.password)
+    except Exception:
+        is_valid = False
+        
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
             
     access_token = create_access_token(data={"sub": str(user.id)})
     return {"user_id": user.id, "username": user.username, "access_token": access_token, "token_type": "bearer"}

@@ -1003,6 +1003,10 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                 recipes_raw,
                 user_ingredients=state["user_profile"]["ingredients"]
             )
+            
+            if recipes_raw:
+                result_str += "\n\n(System Note: These recipes are compatible with the user. You MUST present them. Do NOT discard them unless they contain an explicit 'Does Not Want' ingredient, or conflict with a known dislike from the user's Facts (in the Profile section). Do NOT call `get_recipe_details_tool` before presenting them to the user.)"
+
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
             actions.append(f"Searched recipes for: {query}" + (f" (cuisine: {culture})" if culture else ""))
 
