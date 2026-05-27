@@ -1031,6 +1031,7 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                 short_circuit_replies.append(conv_msg)
 
         elif name == "get_recipe_details_tool":
+            can_short_circuit = False  # Disable short circuit so LLM can answer questions about the recipe
             recipe_id = args.get("recipe_id")
             if recipe_id is not None:
                 try:
@@ -1043,17 +1044,6 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
             
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
             actions.append(f"Retrieved details for recipe ID: {recipe_id}")
-
-            recipe = recipe_db.get_recipe_by_id(recipe_id)
-            if recipe:
-                conv_msg = format_conversational_recipe_details(
-                    state["user_name"],
-                    recipe,
-                    state["user_profile"]["ingredients"]
-                )
-            else:
-                conv_msg = f"Recipe with ID {recipe_id} not found."
-            short_circuit_replies.append(conv_msg)
 
         elif name == "get_inventory_tool":
             can_short_circuit = False

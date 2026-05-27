@@ -38,7 +38,7 @@ _RECIPES_WITH_SEARCH = """# Recipes
   - Wants is only "anything" → `search_recipes(query="")`.
   - Wants has preference (unless search results already returned—follow Cross-Check) → `search_recipes(query=<preference>)`. Use specific food nouns for the query to aid keyword search.
 - If user is stating facts, updating inventory, asking cooking tips, or unrelated questions → do NOT suggest recipes or ask preferences.
-- Cooking steps request → `get_recipe_details_tool(recipe_id=ID)`.
+- Recipe details (cooking steps, ingredient questions, etc.) → call `get_recipe_details_tool(recipe_id=ID)`. You can call this tool multiple times in parallel if checking multiple recipes.
 - Exclude Does Not Want items.
 - Restriction conflict → warmly note it doesn't match their dietary profile; ALWAYS mention they can update their restrictions on **My Kitchen** page.
 - Recipe format:
@@ -52,7 +52,7 @@ _RECIPES_WITHOUT_SEARCH = """# Recipes (search_recipes unavailable this turn)
   - Wants empty + Asked Preferences False → ask {username} what they'd like. No tool call.
   - Wants empty + Asked Preferences True, OR Wants is only "anything" → inform {username} warmly that no matching recipes were found or candidates are exhausted.
 - If user is stating facts, updating inventory, asking cooking tips, or unrelated questions → do NOT suggest recipes or ask preferences.
-- Cooking steps request → `get_recipe_details_tool(recipe_id=ID)`.
+- Recipe details (cooking steps, ingredient questions, etc.) → call `get_recipe_details_tool(recipe_id=ID)`. You can call this tool multiple times in parallel if checking multiple recipes.
 - Restriction conflict → warmly note it doesn't match their dietary profile; ALWAYS mention they can update their restrictions on **My Kitchen** page.
 - Recipe format:
   **[RECIPE NAME]** — [Cook time] mins
@@ -65,7 +65,7 @@ _RECIPES_POST_SEARCH = """# Recipes (Post-Search)
 {search_results}
 </search_results>
 - Evaluate these using the Cross-Check section below.
-- Cooking steps request → `get_recipe_details_tool(recipe_id=ID)`.
+- Recipe details (cooking steps, ingredient questions, etc.) → call `get_recipe_details_tool(recipe_id=ID)`. You can call this tool multiple times in parallel if checking multiple recipes.
 - Recipe format:
   **[RECIPE NAME]** — [Cook time] mins
   • Missing ingredients: [list ONLY the ingredients missing from the user's inventory. Write "None" if they have all ingredients]
@@ -134,7 +134,7 @@ Extract NEW facts, facts to remove, temporary preferences, and user intent from 
    - "recipe_recommendation_request": Asking for recipe suggestions or what to cook/make/eat.
    - "update_inventory": Bought, acquired, ran out of, finished, or removed inventory items.
    - "retrieve_inventory": Asking to list/show/check what they have in stock.
-   - "recipe_details_request": Asking for cooking steps, instructions, or details of a specific recipe.
+   - "recipe_details_request": Asking for cooking steps, instructions, ingredients, or any details about one or more previously suggested recipes.
    - "general_chat": Stating preferences/facts, general culinary questions, greetings, or anything not already handled by the tags above.
 
 # Constraints
