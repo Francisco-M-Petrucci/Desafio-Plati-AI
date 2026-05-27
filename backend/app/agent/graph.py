@@ -979,7 +979,7 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                 
                 if viable_in_this_run:
                     # We found at least 1 viable recipe, satisfying the threshold of 1
-                    recipes_raw = viable_in_this_run[:3] # Suggest up to 3
+                    recipes_raw = viable_in_this_run[:5] # Suggest up to 5
                     break
                 else:
                     # 0 viable recipes remain, so we continue loop to re-search
