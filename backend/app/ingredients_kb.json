@@ -49,7 +49,7 @@
   "mixed mushrooms": ["mixed mushrooms", "mushrooms", "mushroom", "wild mushrooms"],
   "white wine": ["white wine", "cooking white wine"],
   "thyme": ["thyme", "fresh thyme"],
-  "beef chuck roast": ["beef chuck roast", "beef roast", "chuck roast"],
+  "beef chuck roast": ["beef chuck roast", "beef roast", "chuck roast", "ground beef"],
   "potatoes": ["potatoes", "potato"],
   "carrots": ["carrots", "carrot"],
   "celery": ["celery", "celery stalks", "celery stalk"],
@@ -84,7 +84,7 @@
   "red wine vinegar": ["red wine vinegar"],
   "canned crushed tomatoes": ["canned crushed tomatoes", "crushed tomatoes"],
   "heavy cream": ["heavy cream", "cream"],
-  "penne pasta": ["penne pasta", "penne", "pasta"],
+  "penne pasta": ["penne pasta", "penne", "pasta", "spaghetti"],
   "cherry tomatoes": ["cherry tomatoes", "cherry tomato"],
   "zucchini": ["zucchini", "zucchinis"],
   "bell pepper": ["bell pepper", "bell peppers", "green bell pepper", "red bell pepper", "yellow bell pepper"],
@@ -127,5 +127,8 @@
   "plum": ["plum", "plums"],
   "raspberry": ["raspberry", "raspberries"],
   "blackberry": ["blackberry", "blackberries"],
-  "kiwi": ["kiwi", "kiwis", "kiwifruit"]
+  "kiwi": ["kiwi", "kiwis", "kiwifruit"],
+  "chickpeas": ["chickpeas", "canned chickpeas", "garbanzo beans"],
+  "rolled oats": ["rolled oats", "oats", "oatmeal"],
+  "cauliflower": ["cauliflower", "cauliflower florets"]
 }

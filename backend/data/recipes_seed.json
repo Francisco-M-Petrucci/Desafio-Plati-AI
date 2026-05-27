@@ -436,5 +436,333 @@
       "Serve hot with jasmine rice."
     ],
     "description": "A fragrant, spicy, and coconut-creamy Thai curry loaded with fresh green vegetables and tofu."
+  },
+  {
+    "id": 123,
+    "name": "Classic Spaghetti Bolognese",
+    "required_appliances": ["stove"],
+    "cuisine_type": "italian",
+    "dietary_tags": ["nut-free"],
+    "minutes": 45,
+    "tags": ["pasta", "beef", "stove", "italian", "dinner", "comfort-food", "nut-free"],
+    "ingredients": ["ground beef", "onion", "garlic", "canned tomatoes", "tomato paste", "olive oil", "salt", "black pepper", "fresh basil leaves", "spaghetti"],
+    "steps": [
+      "Heat olive oil in a large pot over medium heat and sauté finely chopped onion and garlic until soft.",
+      "Add ground beef and cook until browned.",
+      "Stir in tomato paste and canned tomatoes.",
+      "Simmer on low heat for 30 minutes, stirring occasionally.",
+      "Season with salt, black pepper, and top with torn fresh basil leaves.",
+      "Serve hot over cooked spaghetti."
+    ],
+    "description": "A rich, slow-simmered classic Italian beef sauce perfect over pasta."
+  },
+  {
+    "id": 124,
+    "name": "Classic Chocolate Chip Cookies",
+    "required_appliances": ["oven", "blender/mixer"],
+    "cuisine_type": "american",
+    "dietary_tags": ["vegetarian", "nut-free"],
+    "minutes": 20,
+    "tags": ["cookies", "baking", "oven", "mixer", "vegetarian", "sweet", "american", "classic", "nut-free"],
+    "ingredients": ["all-purpose flour", "butter", "sugar", "eggs", "baking soda", "vanilla extract", "salt", "dark chocolate chips"],
+    "steps": [
+      "Preheat the oven to 375°F (190°C).",
+      "Cream together butter and sugar until smooth.",
+      "Beat in the eggs one at a time, then stir in the vanilla extract.",
+      "Combine the flour, baking soda, and salt; gradually blend into the creamed mixture.",
+      "Fold in the chocolate chips.",
+      "Drop rounded spoonfuls onto ungreased baking sheets and bake for 8 to 10 minutes."
+    ],
+    "description": "Warm, soft, chewy chocolate chip cookies made from scratch."
+  },
+  {
+    "id": 125,
+    "name": "Traditional Greek Tzatziki",
+    "required_appliances": [],
+    "cuisine_type": "greek",
+    "dietary_tags": ["vegetarian", "gluten-free", "nut-free"],
+    "minutes": 10,
+    "tags": ["sauce", "dip", "no-cook", "greek", "vegetarian", "gluten-free", "fresh", "nut-free"],
+    "ingredients": ["greek yogurt", "cucumber", "garlic", "olive oil", "lemon juice", "fresh dill", "salt"],
+    "steps": [
+      "Grate the cucumber and squeeze out excess moisture using a clean kitchen towel.",
+      "In a medium bowl, combine the Greek yogurt, grated cucumber, minced garlic, olive oil, and lemon juice.",
+      "Stir in finely chopped fresh dill and salt.",
+      "Chill in the refrigerator for at least 30 minutes before serving."
+    ],
+    "description": "A cool and refreshing cucumber yogurt dip seasoned with garlic and fresh dill."
+  },
+  {
+    "id": 126,
+    "name": "Classic Caprese Salad",
+    "required_appliances": [],
+    "cuisine_type": "italian",
+    "dietary_tags": ["vegetarian", "gluten-free", "nut-free"],
+    "minutes": 5,
+    "tags": ["salad", "no-cook", "italian", "vegetarian", "gluten-free", "summer", "fresh", "nut-free"],
+    "ingredients": ["tomato", "fresh mozzarella cheese", "fresh basil leaves", "extra virgin olive oil", "salt", "black pepper"],
+    "steps": [
+      "Slice the tomatoes and fresh mozzarella into 1/4-inch-thick rounds.",
+      "Alternate tomato and mozzarella slices on a serving platter.",
+      "Tuck fresh basil leaves between the slices.",
+      "Drizzle generously with extra virgin olive oil.",
+      "Sprinkle with salt and freshly ground black pepper."
+    ],
+    "description": "A simple Italian salad showcasing fresh tomatoes, mozzarella, and sweet basil."
+  },
+  {
+    "id": 127,
+    "name": "Garlic Roasted Broccoli",
+    "required_appliances": ["oven"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 20,
+    "tags": ["side-dish", "vegetables", "oven", "vegan", "vegetarian", "gluten-free", "lactose-free", "easy", "nut-free"],
+    "ingredients": ["broccoli florets", "garlic", "olive oil", "salt", "black pepper", "lemon"],
+    "steps": [
+      "Preheat the oven to 400°F (200°C).",
+      "Toss the broccoli florets with olive oil, minced garlic, salt, and black pepper in a bowl.",
+      "Spread the broccoli in a single layer on a baking sheet.",
+      "Roast for 15-20 minutes until the edges are crispy and slightly browned.",
+      "Drizzle with fresh lemon juice before serving."
+    ],
+    "description": "Crispy roasted broccoli florets tossed with toasted garlic and a squeeze of fresh lemon."
+  },
+  {
+    "id": 128,
+    "name": "Indian Chickpea Curry",
+    "required_appliances": ["stove"],
+    "cuisine_type": "indian",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 30,
+    "tags": ["curry", "chickpeas", "stove", "vegan", "vegetarian", "gluten-free", "lactose-free", "winter", "indian", "spicy", "nut-free"],
+    "ingredients": ["onion", "garlic", "ginger", "canned tomatoes", "chili powder", "turmeric", "cumin", "garam masala", "vegetable broth", "cilantro", "chickpeas"],
+    "steps": [
+      "Heat oil in a large pan over medium heat. Sauté chopped onion, garlic, and ginger until soft.",
+      "Stir in spices: garam masala, cumin, turmeric, and chili powder. Cook for 1 minute.",
+      "Add canned tomatoes, vegetable broth, and drained chickpeas.",
+      "Simmer for 15-20 minutes until the curry is thickened.",
+      "Stir in chopped cilantro and serve hot."
+    ],
+    "description": "A flavorful and robust Indian chickpea curry seasoned with traditional spices."
+  },
+  {
+    "id": 129,
+    "name": "Fresh Mango Salsa",
+    "required_appliances": [],
+    "cuisine_type": "mexican",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 10,
+    "tags": ["salsa", "no-cook", "mexican", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "fresh", "sweet", "nut-free"],
+    "ingredients": ["mango", "bell pepper", "red onion", "cilantro", "lime juice", "salt"],
+    "steps": [
+      "Peel and dice the fresh mango and red bell pepper.",
+      "Finely chop the red onion and fresh cilantro.",
+      "Combine all ingredients in a medium bowl.",
+      "Drizzle with fresh lime juice and season with a pinch of salt.",
+      "Toss to combine and let sit for 10 minutes to marry flavors before serving."
+    ],
+    "description": "A sweet, colorful, and tangy salsa featuring ripe mangoes, bell peppers, and fresh cilantro."
+  },
+  {
+    "id": 130,
+    "name": "Classic Avocado Toast",
+    "required_appliances": [],
+    "cuisine_type": "",
+    "dietary_tags": ["vegan", "vegetarian", "lactose-free", "nut-free"],
+    "minutes": 5,
+    "tags": ["breakfast", "toast", "no-cook", "vegan", "vegetarian", "lactose-free", "easy", "quick", "nut-free"],
+    "ingredients": ["baguette slices", "avocado", "olive oil", "salt", "black pepper", "cherry tomatoes"],
+    "steps": [
+      "Toast the baguette slices until golden and crispy.",
+      "Mash the ripe avocado in a small bowl with a pinch of salt, pepper, and a drizzle of olive oil.",
+      "Spread the mashed avocado evenly over the toasted bread.",
+      "Top with halved cherry tomatoes and a light sprinkle of black pepper."
+    ],
+    "description": "Simple and delicious toasted bread topped with creamy mashed avocado and fresh cherry tomatoes."
+  },
+  {
+    "id": 131,
+    "name": "Roasted Sweet Potato Salad",
+    "required_appliances": ["oven"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 35,
+    "tags": ["salad", "sweet-potato", "oven", "vegan", "vegetarian", "gluten-free", "lactose-free", "autumn", "nut-free"],
+    "ingredients": ["sweet potatoes", "olive oil", "salt", "black pepper", "spinach", "cherry tomatoes", "lemon"],
+    "steps": [
+      "Preheat the oven to 400°F (200°C).",
+      "Peel and cube sweet potatoes, then toss with olive oil, salt, and pepper.",
+      "Roast on a baking sheet for 20-25 minutes until tender and caramelized.",
+      "Let the sweet potatoes cool slightly.",
+      "Toss with baby spinach leaves and halved cherry tomatoes.",
+      "Drizzle with a simple dressing of olive oil and fresh lemon juice."
+    ],
+    "description": "A warm and hearty roasted sweet potato salad tossed with fresh spinach and cherry tomatoes."
+  },
+  {
+    "id": 132,
+    "name": "Roasted Garlic Parmesan Asparagus",
+    "required_appliances": ["oven"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegetarian", "gluten-free", "nut-free"],
+    "minutes": 15,
+    "tags": ["side-dish", "vegetables", "oven", "vegetarian", "gluten-free", "spring", "easy", "nut-free"],
+    "ingredients": ["asparagus spears", "olive oil", "garlic", "parmesan cheese", "salt", "black pepper"],
+    "steps": [
+      "Preheat oven to 400°F (200°C).",
+      "Trim the tough ends of the asparagus spears.",
+      "Place asparagus on a baking sheet, drizzle with olive oil, and toss to coat.",
+      "Sprinkle with minced garlic, salt, black pepper, and grated parmesan cheese.",
+      "Roast for 10-12 minutes until the asparagus is tender and the cheese is melted and golden."
+    ],
+    "description": "Crispy roasted asparagus spears flavored with garlic and a savory parmesan crust."
+  },
+  {
+    "id": 133,
+    "name": "Simple French Crepes",
+    "required_appliances": ["stove", "blender/mixer"],
+    "cuisine_type": "french",
+    "dietary_tags": ["vegetarian", "nut-free"],
+    "minutes": 20,
+    "tags": ["breakfast", "crepes", "stove", "mixer", "vegetarian", "french", "sweet", "nut-free"],
+    "ingredients": ["all-purpose flour", "milk", "eggs", "butter", "sugar", "salt", "vanilla extract"],
+    "steps": [
+      "In a blender, combine flour, milk, eggs, melted butter, sugar, vanilla extract, and salt. Blend until smooth.",
+      "Heat a lightly greased non-stick skillet over medium heat.",
+      "Pour a thin layer of batter into the skillet, swirling to cover the bottom completely.",
+      "Cook for 1-2 minutes until the bottom is golden, then flip and cook the other side for 1 minute.",
+      "Serve warm with fruit, sugar, or maple syrup."
+    ],
+    "description": "Thin and delicate French crepes, perfect for breakfast or dessert."
+  },
+  {
+    "id": 134,
+    "name": "Healthy Banana Oatmeal Pancakes",
+    "required_appliances": ["stove", "blender/mixer"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 15,
+    "tags": ["breakfast", "pancakes", "banana", "stove", "mixer", "vegetarian", "gluten-free", "lactose-free", "easy", "nut-free"],
+    "ingredients": ["bananas", "eggs", "almond milk", "vanilla extract", "cinnamon", "salt", "baking powder", "maple syrup", "rolled oats"],
+    "steps": [
+      "Blend the bananas, rolled oats, eggs, almond milk, vanilla extract, baking powder, cinnamon, and a pinch of salt until smooth.",
+      "Heat a non-stick pan over medium heat and grease with a little butter or oil.",
+      "Pour small circles of batter and cook until bubbles form on top, then flip and cook until golden brown.",
+      "Serve warm topped with sliced bananas and a drizzle of maple syrup."
+    ],
+    "description": "Naturally sweet and healthy pancakes made with bananas, rolled oats, and eggs."
+  },
+  {
+    "id": 135,
+    "name": "Indian Aloo Gobi",
+    "required_appliances": ["stove"],
+    "cuisine_type": "indian",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 30,
+    "tags": ["vegetables", "curry", "stove", "vegan", "vegetarian", "gluten-free", "lactose-free", "winter", "indian", "spicy", "nut-free"],
+    "ingredients": ["potatoes", "onion", "garlic", "ginger", "cumin", "turmeric", "chili powder", "garam masala", "salt", "cilantro", "cauliflower"],
+    "steps": [
+      "Heat oil in a large skillet. Sauté cumin seeds, chopped onion, minced garlic, and ginger until fragrant.",
+      "Add cubed potatoes and cauliflower florets.",
+      "Toss in turmeric, chili powder, garam masala, and salt.",
+      "Cover and cook on medium-low heat for 20 minutes, stirring occasionally, until vegetables are tender.",
+      "Garnish with chopped fresh cilantro and serve hot."
+    ],
+    "description": "A classic Indian dry curry featuring potatoes and cauliflower seasoned with aromatic spices."
+  },
+  {
+    "id": 136,
+    "name": "Spicy Mexican Salsa Roja",
+    "required_appliances": ["blender/mixer", "stove"],
+    "cuisine_type": "mexican",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free", "nut-free"],
+    "minutes": 15,
+    "tags": ["salsa", "dip", "stove", "mixer", "mexican", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "spicy", "fresh", "nut-free"],
+    "ingredients": ["roma tomato", "onion", "garlic", "jalapeno", "cilantro", "lime juice", "salt"],
+    "steps": [
+      "Roast the tomatoes, halved onion, garlic, and jalapenos on a skillet until slightly charred.",
+      "Transfer the charred vegetables to a blender.",
+      "Add fresh cilantro, lime juice, and salt.",
+      "Blend until the salsa is smooth or slightly chunky, depending on preference.",
+      "Serve with tortilla chips."
+    ],
+    "description": "A warm and spicy Mexican red salsa made from roasted tomatoes, jalapenos, and garlic."
+  },
+  {
+    "id": 137,
+    "name": "Lemon Garlic Salmon",
+    "required_appliances": ["stove"],
+    "cuisine_type": "",
+    "dietary_tags": ["gluten-free", "lactose-free", "nut-free"],
+    "minutes": 20,
+    "tags": ["salmon", "fish", "stove", "gluten-free", "lactose-free", "spring", "easy", "nut-free"],
+    "ingredients": ["salmon fillets", "olive oil", "butter", "garlic", "lemon", "salt", "black pepper", "parsley"],
+    "steps": [
+      "Season the salmon fillets with salt and black pepper on both sides.",
+      "Heat olive oil and a tablespoon of butter in a skillet over medium-high heat.",
+      "Sear the salmon skin-side down for 4-5 minutes, then flip and cook for another 3-4 minutes.",
+      "Add minced garlic to the pan and cook for 1 minute until fragrant.",
+      "Pour in fresh lemon juice and baste the salmon with the pan juices.",
+      "Garnish with chopped fresh parsley and serve."
+    ],
+    "description": "Pan-seared salmon fillets in a buttery lemon garlic sauce."
+  },
+  {
+    "id": 138,
+    "name": "Tropical Pineapple Mango Smoothie",
+    "required_appliances": ["blender/mixer"],
+    "cuisine_type": "",
+    "dietary_tags": ["vegan", "vegetarian", "gluten-free", "lactose-free"],
+    "minutes": 5,
+    "tags": ["smoothie", "drink", "no-cook", "mixer", "vegan", "vegetarian", "gluten-free", "lactose-free", "summer", "sweet"],
+    "ingredients": ["pineapple", "mango", "bananas", "coconut milk"],
+    "steps": [
+      "Chop the pineapple, mango, and banana into pieces.",
+      "Place the fruit in a blender.",
+      "Pour in the coconut milk.",
+      "Blend on high speed until completely smooth and creamy.",
+      "Pour into a glass and serve cold."
+    ],
+    "description": "A refreshing tropical smoothie made with sweet mangoes, pineapple, bananas, and creamy coconut milk."
+  },
+  {
+    "id": 139,
+    "name": "Berry Spinach Salad",
+    "required_appliances": [],
+    "cuisine_type": "",
+    "dietary_tags": ["vegetarian", "gluten-free"],
+    "minutes": 10,
+    "tags": ["salad", "no-cook", "vegetarian", "gluten-free", "summer", "fresh", "sweet"],
+    "ingredients": ["spinach", "strawberry", "blueberry", "feta cheese", "olive oil", "red wine vinegar", "salt", "black pepper"],
+    "steps": [
+      "Wash and dry the baby spinach.",
+      "Slice the fresh strawberries.",
+      "In a large bowl, combine the spinach, strawberries, and blueberries.",
+      "Crumble feta cheese over the top.",
+      "Whisk together olive oil, red wine vinegar, salt, and pepper, then drizzle over the salad.",
+      "Toss gently to combine."
+    ],
+    "description": "A fresh summer salad combining crisp baby spinach, sweet berries, and salty feta cheese."
+  },
+  {
+    "id": 140,
+    "name": "Creamy Garlic Mushroom Pasta",
+    "required_appliances": ["stove"],
+    "cuisine_type": "italian",
+    "dietary_tags": ["vegetarian", "nut-free"],
+    "minutes": 25,
+    "tags": ["pasta", "mushrooms", "stove", "vegetarian", "dinner", "italian", "comfort-food", "nut-free"],
+    "ingredients": ["penne pasta", "mixed mushrooms", "butter", "olive oil", "garlic", "heavy cream", "parmesan cheese", "salt", "black pepper", "parsley"],
+    "steps": [
+      "Cook penne pasta in boiling salted water according to package instructions.",
+      "Heat butter and olive oil in a skillet. Sauté sliced mushrooms until golden brown.",
+      "Stir in minced garlic and cook for 1 minute.",
+      "Pour in heavy cream and let it simmer for 3 minutes.",
+      "Stir in grated parmesan cheese until melted and smooth.",
+      "Drain pasta and toss directly into the mushroom cream sauce.",
+      "Season with salt and black pepper, and garnish with chopped parsley."
+    ],
+    "description": "Rich and creamy pasta tossed with sautéed mushrooms, garlic, and freshly grated parmesan cheese."
   }
 ]
