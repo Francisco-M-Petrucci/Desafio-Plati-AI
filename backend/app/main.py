@@ -40,6 +40,13 @@ try:
 except Exception as e:
     print(f"Migration error during main startup (asked_preferences column): {e}")
 
+try:
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN temporary_preferences_updated_at DATETIME;"))
+except Exception as e:
+    print(f"Migration error during main startup (temporary_preferences_updated_at column): {e}")
+
+
 # Migration step: standardize existing ingredients and reset to checklist defaults
 try:
     from app.database import SessionLocal
@@ -127,6 +134,44 @@ class RegisterRequest(BaseModel):
     restrictions: List[str]
     ingredients: List[str]
 
+
+from datetime import datetime
+
+def check_and_trigger_cleanup(user_id: int, db: Session):
+    """
+    Check if temporary preferences have not been updated for an hour.
+    If so, clean wants_temporary and does_not_want_temporary, reset asked_preferences,
+    and output a direct separator message.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return
+
+    # Check if there are temporary preferences to clean.
+    has_temp_prefs = bool((user.wants_temporary or "").strip()) or bool((user.does_not_want_temporary or "").strip())
+    if not has_temp_prefs:
+        return
+
+    # If temporary_preferences_updated_at is not set, initialize it to now.
+    if not user.temporary_preferences_updated_at:
+        user.temporary_preferences_updated_at = datetime.utcnow()
+        db.commit()
+        return
+
+    # Calculate elapsed time in seconds
+    elapsed = (datetime.utcnow() - user.temporary_preferences_updated_at).total_seconds()
+    if elapsed >= 3600:  # 1 hour
+        # Clear preferences
+        user.wants_temporary = ""
+        user.does_not_want_temporary = ""
+        user.asked_preferences = False
+        user.temporary_preferences_updated_at = None
+        
+        # Add cleanup message separating old conversation from new
+        cleanup_msg = "\nMy kitchen is now clean, and I am ready for our next cooking session!\n"
+        db.add(ChatMessage(user_id=user_id, role="assistant", content=cleanup_msg))
+        db.commit()
+        print(f"Triggered reactive cleanup for user_id={user_id} (elapsed={elapsed}s)")
 
 
 # --- API Routes ---
@@ -268,6 +313,7 @@ def get_initial_search(user_id: int, db: Session = Depends(get_db)):
 @app.get("/api/users/{user_id}/profile")
 def get_profile(user_id: int, db: Session = Depends(get_db)):
     """Retrieve full kitchen inventory, appliances, restrictions, and facts."""
+    check_and_trigger_cleanup(user_id, db)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -381,6 +427,7 @@ def update_restrictions(user_id: int, req: RestrictionUpdate, db: Session = Depe
 @app.post("/api/chat")
 def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Exposes chat agent endpoint, loading history, running graph, and saving history."""
+    check_and_trigger_cleanup(req.user_id, db)
     user = db.query(User).filter(User.id == req.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -399,6 +446,8 @@ def chat(req: ChatRequest, background_tasks: BackgroundTasks, db: Session = Depe
     token_count = 0
     formatted_messages = []
     for msg in history_msgs:
+        if "My kitchen is now clean, and I am ready for our next cooking session!" in msg.content:
+            break
         minified_content = minify_assistant_message(msg.content)
         msg_tokens = len(minified_content) // 4  # Estimate: 4 chars ≈ 1 token
         if token_count + msg_tokens > MAX_HISTORY_TOKENS:
@@ -494,6 +543,7 @@ def list_recipes(
 @app.get("/api/users/{user_id}/chat-history")
 def get_chat_history(user_id: int, db: Session = Depends(get_db)):
     """Fetch all database saved messages for UI reload."""
+    check_and_trigger_cleanup(user_id, db)
     msgs = db.query(ChatMessage).filter(
         ChatMessage.user_id == user_id
     ).order_by(ChatMessage.created_at.asc()).all()
@@ -522,6 +572,7 @@ def update_temporary_preferences(user_id: int, req: TemporaryPreferencesUpdate, 
         raise HTTPException(status_code=404, detail="User not found")
     user.wants_temporary = req.wants_temporary
     user.does_not_want_temporary = req.does_not_want_temporary
+    user.temporary_preferences_updated_at = datetime.utcnow()
     db.commit()
     return {
         "status": "success",

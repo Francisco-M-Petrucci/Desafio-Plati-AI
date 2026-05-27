@@ -23,6 +23,7 @@ class User(Base):
     wants_temporary = Column(Text, nullable=True, default="")
     does_not_want_temporary = Column(Text, nullable=True, default="")
     asked_preferences = Column(Boolean, nullable=False, default=False)
+    temporary_preferences_updated_at = Column(DateTime, nullable=True, default=datetime.utcnow)
 
 
 class Appliance(Base):

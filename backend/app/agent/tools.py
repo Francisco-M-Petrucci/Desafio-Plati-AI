@@ -7,6 +7,8 @@ from app.models import Ingredient, UserFact, Appliance, DietaryRestriction, User
 from app.recipes_vector_db import RecipeVectorDB
 from app.ingredients_formatter import standardize_ingredient
 
+from datetime import datetime
+
 # Instantiate the vector DB helper
 recipe_db = RecipeVectorDB()
 
@@ -449,6 +451,7 @@ def save_temporary_preferences_to_db(user_id: int, wants: List[str], does_not_wa
 
         user.wants_temporary = ", ".join(existing_wants)
         user.does_not_want_temporary = ", ".join(existing_not_wants)
+        user.temporary_preferences_updated_at = datetime.utcnow()
         db.commit()
 
         return f"Merged wants: {new_wants}, Merged does not wants: {new_not_wants}"

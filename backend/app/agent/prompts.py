@@ -30,7 +30,9 @@ SYSTEM_PROMPT_WITH_SEARCH = """You are {username}'s Recipe Companion AI. Manage 
 - Restriction conflict: If {username}'s request clearly conflicts with their Restrictions (e.g., asking for meat dishes while being vegetarian), warmly let them know the request doesn't match their current dietary profile and mention they can update or disable their restrictions anytime on the **My Kitchen** page.
 - Format each recipe exactly as returned, using:
   **[RECIPE NAME]** — [Cook time] mins
-  • Missing ingredients: [list] (only include this sub-bullet if there are missing ingredients)
+  (If the recipe has missing ingredients, include a sub-bullet listing them:
+  • Missing ingredients: [list]
+  If there are no missing ingredients, do NOT output a "Missing ingredients" line at all.)
 {cross_check_section}
 
 # Acknowledging Tool Actions
@@ -81,7 +83,9 @@ SYSTEM_PROMPT_WITHOUT_SEARCH = """You are {username}'s Recipe Companion AI. Mana
 - Restriction conflict: If {username}'s request clearly conflicts with their Restrictions (e.g., asking for meat dishes while being vegetarian), warmly let them know the request doesn't match their current dietary profile and mention they can update or disable their restrictions anytime on the **My Kitchen** page.
 - Format each recipe exactly as returned, using:
   **[RECIPE NAME]** — [Cook time] mins
-  • Missing ingredients: [list] (only include this sub-bullet if there are missing ingredients)
+  (If the recipe has missing ingredients, include a sub-bullet listing them:
+  • Missing ingredients: [list]
+  If there are no missing ingredients, do NOT output a "Missing ingredients" line at all.)
 {cross_check_section}
 
 # Acknowledging Tool Actions
@@ -129,7 +133,9 @@ SYSTEM_PROMPT_POST_SEARCH = """You are {username}'s Recipe Companion AI. Manage 
 - User requests cooking steps → call `get_recipe_details_tool(recipe_id=ID)`.
 - Format each recipe exactly as returned, using:
   **[RECIPE NAME]** — [Cook time] mins
-  • Missing ingredients: [list] (only include this sub-bullet if there are missing ingredients)
+  (If the recipe has missing ingredients, include a sub-bullet listing them:
+  • Missing ingredients: [list]
+  If there are no missing ingredients, do NOT output a "Missing ingredients" line at all.)
 {cross_check_section}
 
 # Acknowledging Tool Actions
