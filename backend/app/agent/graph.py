@@ -191,7 +191,7 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         asked_preferences=str(asked_pref_at_start)
     )
 
-    intent = "general_chat"
+    intents = ["general_chat"]
     try:
         # Enable native JSON Mode for Groq/OpenAI to ensure schema compliance
         groq_key = os.getenv("GROQ_API_KEY")
@@ -214,7 +214,13 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
 
         parsed = json.loads(content)
         user_id = state["user_id"]
-        intent = parsed.get("user_intent", "general_chat")
+        
+        # Parse user_intents (handle potential list/string format from LLM output)
+        raw_intents = parsed.get("user_intents") or parsed.get("user_intent") or "general_chat"
+        if isinstance(raw_intents, list):
+            intents = [str(i).strip().lower() for i in raw_intents if i]
+        else:
+            intents = [str(raw_intents).strip().lower()]
 
         # 4. Save/remove extracted facts
         saved_facts = []
@@ -241,7 +247,7 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
         # for their preferences in the previous turn, do not save temporary wants!
         # This prevents statements of general preferences (like "I love Mexican food") from
         # populating the wants list when the user hasn't asked for a recipe recommendation.
-        if intent != "recipe_recommendation_request" and not asked_pref_at_start:
+        if "recipe_recommendation_request" not in intents and not asked_pref_at_start:
             wants = []
         
         if wants or not_wants:
@@ -263,7 +269,7 @@ def extract_preferences_node(state: AgentState) -> Dict[str, Any]:
     return {
         "user_profile": profile,
         "recent_memory_updates": {"added": saved_facts, "removed": removed_facts},
-        "user_intent": intent
+        "user_intents": intents
     }
 
 
@@ -340,14 +346,33 @@ def check_details_intent(messages: List[Any]) -> bool:
     return False
 
 
-def check_inventory_intent(messages: List[Any]) -> bool:
-    # 1. Broad but specific inventory keywords
-    inventory_keywords = {
-        "inventory", "stock", "pantry", "fridge", "cupboard", "cabinet",
+def check_update_inventory_intent(messages: List[Any]) -> bool:
+    update_keywords = {
         "purchased", "used up", "consume", "run out", "ran out",
         "no longer", "no more", "none left"
     }
-    # 2. Specific phrases for showing or asking about inventory
+    actions = {
+        "bought", "got", "acquired", "used", "cooked", "remove", "add", "finish", "finished", "out of"
+    }
+    import re
+    user_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
+    for msg in reversed(user_messages[-2:]):
+        if not msg.content:
+            continue
+        text_lower = msg.content.lower()
+        for kw in update_keywords:
+            if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
+                return True
+        for act in actions:
+            if re.search(r'\b' + re.escape(act) + r'\b', text_lower):
+                return True
+    return False
+
+
+def check_retrieve_inventory_intent(messages: List[Any]) -> bool:
+    retrieve_keywords = {
+        "inventory", "stock", "pantry", "fridge", "cupboard", "cabinet"
+    }
     phrases = [
         r"\bdo i have\b",
         r"\bwhat do i have\b",
@@ -359,33 +384,18 @@ def check_inventory_intent(messages: List[Any]) -> bool:
         r"\bwhat is in\b",
         r"\bwhat have i\b"
     ]
-    # 3. Action verbs indicating inventory changes when referencing food/items
-    actions = {
-        "bought", "got", "acquired", "used", "cooked", "remove", "add", "finish", "finished", "out of"
-    }
-    
     import re
     user_messages = [msg for msg in messages if isinstance(msg, HumanMessage)]
     for msg in reversed(user_messages[-2:]):
         if not msg.content:
             continue
         text_lower = msg.content.lower()
-        
-        # Check direct keywords
-        for kw in inventory_keywords:
+        for kw in retrieve_keywords:
             if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
                 return True
-                
-        # Check phrases
         for phrase in phrases:
             if re.search(phrase, text_lower):
                 return True
-                
-        # Check action verbs
-        for act in actions:
-            if re.search(r'\b' + re.escape(act) + r'\b', text_lower):
-                return True
-                
     return False
 
 
@@ -469,13 +479,34 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
                 1 for tc in msg.tool_calls if tc["name"] == "search_recipes"
             )
 
-    # is_post_search: True whenever a search result just arrived (first OR re-search).
-    # The LLM may call search_recipes again up to MAX_SEARCH_CALLS times if every
-    # retrieved batch is fully filtered out by the user's dislikes or long-term facts.
-    is_post_search = (
-        isinstance(state["messages"][-1], ToolMessage)
-        and search_calls_this_turn >= 1
-    )
+    # Get messages in the current turn (since the last HumanMessage)
+    current_turn_messages = []
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            break
+        current_turn_messages.append(msg)
+    current_turn_messages.reverse()
+
+    # Map tool call IDs to tool names in the current turn
+    tool_id_to_name = {}
+    for msg in current_turn_messages:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            for tc in msg.tool_calls:
+                tc_id = tc.get("id")
+                if tc_id:
+                    tool_id_to_name[tc_id] = tc.get("name")
+
+    # Find the latest search results ToolMessage in the current turn
+    latest_search_msg = None
+    for msg in reversed(current_turn_messages):
+        if isinstance(msg, ToolMessage):
+            tool_name = tool_id_to_name.get(msg.tool_call_id)
+            if tool_name == "search_recipes":
+                latest_search_msg = msg
+                break
+
+    # is_post_search is True if a search has run in this turn and returned recipes
+    is_post_search = (latest_search_msg is not None)
     print(f"agent_node debug: is_post_search={is_post_search}, search_calls_this_turn={search_calls_this_turn}/{MAX_SEARCH_CALLS}")
 
 
@@ -489,7 +520,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
     has_anything = "anything" in wants_list
     wants_empty = len(wants_list) == 0
 
-    latest_has_desire = (state.get("user_intent") == "recipe_recommendation_request")
+    latest_has_desire = ("recipe_recommendation_request" in state.get("user_intents", []))
 
     # Programmatic fallback: if Wants is empty but the user intent indicates recipe desire,
     # check if the user mentioned any known food terms in their message.
@@ -551,49 +582,20 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         # Set asked_preferences to True in DB so that next turn has it as True
         set_user_asked_preferences(state["user_id"], True)
         p["asked_preferences"] = True
-    # 4. Check if we should bind search.
-    #
-    # bind_inventory is computed here (earlier than the tool-binding block below) because
-    # it is also needed to determine bind_search correctly.
-    #
-    # The key insight: when wants_str is already set (the extractor captured a preference),
-    # we should bind search_recipes regardless of whether the user intent is active.
-    # User intent only guards the case where wants are *empty* (to decide
-    # whether the agent should ask for preferences or wait). When wants are already populated,
-    # the intent to search is implicit — unless the current message is a pure inventory action.
-    bind_inventory = check_inventory_intent(state["messages"])
+
+    # 4. Check if we should bind inventory tools (hybrid approach).
+    intents = state.get("user_intents", [])
+    has_specific_intent = any(
+        i in intents
+        for i in ["recipe_recommendation_request", "update_inventory", "retrieve_inventory", "recipe_details_request"]
+    )
     
-    is_anything_and_asked = has_anything and asked_pref_at_start
-    is_empty_and_asked = wants_empty and asked_pref_at_start
-    
-    if not wants_empty and not has_anything:
-        # Specific preferences exist
-        bind_search = latest_has_desire or not bind_inventory
-    elif (is_anything_and_asked or is_empty_and_asked) and latest_has_desire:
-        # Wants "anything" or is empty, but asked_preferences is True and user wants recommendations
-        bind_search = True
+    if has_specific_intent:
+        bind_update_inventory = ("update_inventory" in intents)
+        bind_retrieve_inventory = ("retrieve_inventory" in intents)
     else:
-        bind_search = False
-
-    # Safety cap: once MAX_SEARCH_CALLS searches have happened in the same turn,
-    # force bind_search off so search_recipes cannot be called again.
-    # This is a last-resort safeguard — normal flow should terminate earlier
-    # because the recipe pool is exhausted or the LLM finds valid survivors.
-    if search_calls_this_turn >= MAX_SEARCH_CALLS:
-        bind_search = False
-        print(f"agent_node debug: safety cap reached ({MAX_SEARCH_CALLS} searches) — bind_search forced to False")
-
-    # 5. Programmatic search is no longer used. We let the agent call the search_recipes tool.
-    rag_recipes = []
-
-    # 6. Determine tool bindings dynamically to prevent hallucinations:
-    # - If Wants is empty, user is asking for recommendations, and asked_preferences is False,
-    #   bind no tools (forces the agent to ask for preferences instead of picking a random recipe).
-    # - Otherwise, bind search_recipes if bind_search is True, inventory tools if
-    #   inventory intent is detected, and get_recipe_details_tool only when recipe
-    #   IDs have already been shown in the conversation (prevents random ID calls).
-    # Note: bind_inventory was already computed above alongside bind_search.
-    bind_details = check_details_intent(state["messages"])
+        bind_update_inventory = check_update_inventory_intent(state["messages"])
+        bind_retrieve_inventory = check_retrieve_inventory_intent(state["messages"])
     
     # Check if any recipe IDs have been shown in prior messages so the user has
     # concrete recipes to reference. Matches both raw ("Recipe ID: <num>") and minified ("(ID: <num>)") formats.
@@ -602,26 +604,40 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         msg.content and re.search(r'(?i)\b(?:recipe\s+)?id[:\s]+\d+\b', msg.content)
         for msg in state["messages"]
     )
-    
-    if wants_empty and latest_has_desire and not asked_pref_at_start:
-        tools = []
-        # If recipe IDs have been shown, they might be asking for details/cooking steps of one of them.
-        # We must bind get_recipe_details_tool in this case so the agent can retrieve them.
-        if has_shown_recipes:
-            tools.append(get_recipe_details_tool)
-    else:
-        tools = []
-        if bind_search:
-            tools.append(search_recipes)
-        if bind_inventory:
-            tools.append(update_inventory_tool)
-            tools.append(get_inventory_tool)
-        # Only bind get_recipe_details_tool when recipe IDs have been shown in the
-        # conversation, so the model can't call it with a made-up ID before any search.
-        if has_shown_recipes:
-            tools.append(get_recipe_details_tool)
 
-    print(f"agent_node debug: wants='{wants_str}', bind_search={bind_search}, bind_inventory={bind_inventory}, has_shown_recipes={has_shown_recipes}, tools={[t.name for t in tools]}")
+    # 5. Determine tool bindings dynamically:
+    tools = []
+    
+    # Bind get_recipe_details_tool if recipe details are requested or recipe IDs have been shown
+    if ("recipe_details_request" in intents) or has_shown_recipes:
+        tools.append(get_recipe_details_tool)
+        
+    # Bind search_recipes if recommendation request intent is active or wants list is populated
+    # (except if wants are empty and asked_preferences is False)
+    if ("recipe_recommendation_request" in intents or not wants_empty) and (search_calls_this_turn < MAX_SEARCH_CALLS):
+        if wants_empty and not asked_pref_at_start:
+            pass
+        else:
+            if search_recipes not in tools:
+                tools.append(search_recipes)
+                
+    # Bind inventory tools if update_inventory/retrieve_inventory are active,
+    # or if inventory intent is matched in the message text.
+    if "update_inventory" in intents or bind_update_inventory:
+        if update_inventory_tool not in tools:
+            tools.append(update_inventory_tool)
+            
+    if "retrieve_inventory" in intents or bind_retrieve_inventory:
+        if get_inventory_tool not in tools:
+            tools.append(get_inventory_tool)
+
+    # Align bind_search prompt template trigger with actual search tool presence
+    bind_search = (search_recipes in tools)
+    
+    # We no longer do programmatic pre-search.
+    rag_recipes = []
+
+    print(f"agent_node debug: wants='{wants_str}', bind_search={bind_search}, has_shown_recipes={has_shown_recipes}, tools={[t.name for t in tools]}")
 
     # Format the profile variables for the system prompt
     facts_str = "\n".join(f"- {f}" for f in p["facts"]) if p["facts"] else "None"
@@ -662,9 +678,8 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
 
 
     search_results_str = ""
-    if is_post_search:
-        last_msg = state["messages"][-1]
-        search_results_str = last_msg.content if last_msg and hasattr(last_msg, "content") else ""
+    if is_post_search and latest_search_msg:
+        search_results_str = latest_search_msg.content if hasattr(latest_search_msg, "content") else ""
 
     if is_post_search:
         prompt_template = SYSTEM_PROMPT_POST_SEARCH
@@ -871,7 +886,7 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
 
     # Determine if we can short-circuit this turn
     short_circuit_replies = []
-    can_short_circuit = not has_memory_updates
+    can_short_circuit = not has_memory_updates and not rag_recipes
 
 
     for tool_call in last_msg.tool_calls:

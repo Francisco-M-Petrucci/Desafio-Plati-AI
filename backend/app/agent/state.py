@@ -25,7 +25,7 @@ class AgentState(TypedDict):
     # Memory updates tracked in this turn (e.g. {"added": [...], "removed": [...]})
     recent_memory_updates: Dict[str, List[str]]
     
-    # Extracted user intent (e.g. "recipe_recommendation_request", "inventory_action", "general_chat")
-    user_intent: Optional[str]
+    # Extracted user intents (e.g. ["recipe_recommendation_request", "general_chat"])
+    user_intents: List[str]
 
 
