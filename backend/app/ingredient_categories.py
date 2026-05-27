@@ -120,6 +120,7 @@ INGREDIENT_TO_CATEGORY = {
     "sweet potatoes": "Vegetables & Greens",
     "bamboo shoots": "Vegetables & Greens",
     "broccoli florets": "Vegetables & Greens",
+    "chickpeas": "Vegetables & Greens",
 
     # --- Dairy & Eggs ---
     "parmesan cheese": "Dairy & Eggs",
