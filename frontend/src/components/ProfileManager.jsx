@@ -279,6 +279,20 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
     }
   };
 
+  const handleFillAllKb = async () => {
+    if (!window.confirm("Would you like to populate your kitchen inventory with all ingredients from the dictionary? Existing ingredients will be preserved.")) return;
+    setIsUpdating(true);
+    try {
+      await axios.post(`${API_BASE}/api/users/${user.user_id}/ingredients/add-all-kb`);
+      onProfileUpdate();
+    } catch (err) {
+      console.error("Error filling ingredients dictionary:", err);
+      alert("Failed to fill ingredients from the dictionary.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
 
   const handleClearMemory = async () => {
     if (!window.confirm("Are you sure you want to clear AI's short and long-term memory about you? This deletes all extracted facts and chat history.")) return;
@@ -645,19 +659,51 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
 
       {/* Main Content Area: Ingredients Inventory */}
       <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: '400px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignBars: 'center', marginBottom: '1.5rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '1rem' }}>
           <div>
             <h1 style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', fontWeight: '700' }}>Kitchen Ingredients Inventory</h1>
             <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.875rem', marginTop: '0.25rem' }}>
               Manage what you have in stock. The AI uses this list to recommend recipes.
             </p>
           </div>
-          {(isLoading || isUpdating) && (
-            <div style={{ color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-              <RefreshCw size={14} className="pulse" />
-              <span>Saving...</span>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <button 
+              type="button"
+              onClick={handleFillAllKb}
+              className="btn-secondary"
+              disabled={isUpdating || isLoading}
+              style={{
+                fontSize: '0.85rem',
+                padding: '0.5rem 0.85rem',
+                borderRadius: '8px',
+                borderColor: 'hsl(var(--primary))',
+                background: 'rgba(16, 185, 129, 0.05)',
+                color: 'hsl(var(--primary))',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(16, 185, 129, 0.15)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(16, 185, 129, 0.05)';
+                e.currentTarget.style.transform = 'none';
+              }}
+            >
+              <Sparkles size={14} />
+              <span>Fill Dictionary</span>
+            </button>
+            {(isLoading || isUpdating) && (
+              <div style={{ color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                <RefreshCw size={14} className="pulse" />
+                <span>Saving...</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Add Ingredient Form */}

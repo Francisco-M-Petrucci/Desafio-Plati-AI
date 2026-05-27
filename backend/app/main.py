@@ -321,6 +321,43 @@ def update_ingredients(user_id: int, req: IngredientUpdate, db: Session = Depend
     return {"status": "success", "ingredients": [standardize_ingredient(i) for i in req.ingredients if i.strip()]}
 
 
+@app.post("/api/users/{user_id}/ingredients/add-all-kb")
+def add_all_kb_ingredients(user_id: int, db: Session = Depends(get_db)):
+    """Add all ingredients from the knowledge base to the user's inventory."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    import json
+    kb_path = os.path.join(os.path.dirname(__file__), "ingredients_kb.json")
+    try:
+        with open(kb_path, "r", encoding="utf-8") as f:
+            kb_data = json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load ingredients KB: {str(e)}")
+        
+    # Get user's existing ingredients
+    existing_ingredients = db.query(Ingredient).filter(Ingredient.user_id == user_id).all()
+    existing_names = {ing.name.lower() for ing in existing_ingredients}
+    
+    # Add new ones from KB
+    added = []
+    for name in kb_data.keys():
+        standardized = standardize_ingredient(name)
+        if standardized and standardized.lower() not in existing_names:
+            db.add(Ingredient(
+                user_id=user_id,
+                name=standardized,
+                quantity=1.0,
+                unit="unit"
+            ))
+            added.append(standardized)
+            
+    if added:
+        db.commit()
+        
+    return {"status": "success", "added_count": len(added), "added": added}
+
 
 @app.post("/api/users/{user_id}/restrictions")
 def update_restrictions(user_id: int, req: RestrictionUpdate, db: Session = Depends(get_db)):

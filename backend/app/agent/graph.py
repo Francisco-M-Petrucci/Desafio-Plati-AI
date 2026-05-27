@@ -300,19 +300,26 @@ def _get_known_food_terms() -> set:
 
     # Data-driven: extract cuisine types, recipe name words, and ingredient words from recipe data
     cuisines = set()
+    stop_words = {
+        "with", "and", "the", "for", "from", "but", "that", "this", "these", "those",
+        "about", "into", "over", "under", "without", "made", "style", "easy",
+        "best", "good", "recipe", "recipes", "dish", "dishes", "food", "foods", "meal", "meals"
+    }
     try:
         import re
         for r in recipe_db.get_all_recipe_metadata():
             ct = r.get("cuisine_type", "").lower().strip()
-            if ct:
+            if ct and ct not in stop_words:
                 cuisines.add(ct)
             name = r.get("name", "").lower().strip()
             if name:
                 for word in re.findall(r'[a-zA-Z]{3,}', name):
-                    cuisines.add(word)
+                    if word not in stop_words:
+                        cuisines.add(word)
             for ing in r.get("ingredients", []):
                 for word in re.findall(r'[a-zA-Z]{3,}', ing.lower()):
-                    cuisines.add(word)
+                    if word not in stop_words:
+                        cuisines.add(word)
     except Exception:
         pass
 
