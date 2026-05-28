@@ -67,36 +67,42 @@ ChefCompanion combines three layers of context to drive personalization:
 - Node.js 18+
 
 ### 2. Configure Environment
-Create a `.env` file in the project root:
-```env
-NVIDIA_API_KEY=nvapi-your-key-here
-```
-
-### 3. Setup and Seed Backend
-In a terminal, run the following from the root directory:
+Copy `.env.example` to `.env` in the project root and fill in your keys:
 ```bash
-# Create and activate virtual environment
-python -m venv venv
-.\venv\Scripts\activate
+cp .env.example .env
+```
+Ensure at least your `NVIDIA_API_KEY` is populated.
 
-# Install python dependencies
-pip install -r backend/requirements.txt
+### 3. Automated Setup
 
-# Create tables and seed data (users Alice/Bob + 22 recipes)
-python backend/seed.py
+The easiest way to install all dependencies and seed the database is using the setup scripts.
 
-# Start FastAPI server
-uvicorn backend.app.main:app --reload --port 8000
+**For Windows:**
+```cmd
+setup.bat
 ```
 
-### 4. Setup and Run Frontend
-Open a new terminal window and run:
+**For Mac/Linux:**
 ```bash
-cd frontend
-npm install
-npm run dev
+chmod +x setup.sh start.sh
+./setup.sh
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+### 4. Start the Application
+
+Once setup is complete, you can start both the backend and frontend servers with a single command.
+
+**For Windows:**
+```cmd
+start.bat
+```
+
+**For Mac/Linux:**
+```bash
+./start.sh
+```
+
+Both servers will launch. The application will be available at [http://localhost:5173](http://localhost:5173).
 
 ---
 
