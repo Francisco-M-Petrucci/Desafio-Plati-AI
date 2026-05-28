@@ -12,3 +12,4 @@ pillow
 python-multipart
 passlib[bcrypt]
 python-jose[cryptography]
+pytest

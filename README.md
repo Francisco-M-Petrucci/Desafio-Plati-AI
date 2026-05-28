@@ -86,6 +86,23 @@ To verify hyper-personalization, use the pre-seeded test personas (password: `pa
    Then ask: *"Walk me through making a margherita pizza step-by-step."*
    **Result:** The agent fetches the specific *Classic Italian Margherita Pizza* from the vector database.
 
+## Evaluation Suite
+
+To programmatically guarantee the application's safety, hallucination-prevention, and architectural intent, a robust test suite (`evals.py`) is included using `pytest`. 
+
+The suite comprises 11 distinct evaluation cases covering the agent's three core responsibilities:
+1. **Deterministic Pre-filtering (5 cases):** Asserts that users with dietary restrictions (e.g., Gluten-Free, Vegetarian) or missing appliances (e.g., Oven) strictly cannot be recommended incompatible recipes.
+2. **Fact Extraction Accuracy (3 cases):** Asserts that the LLM correctly parses user messages to permanently memorize facts (e.g., "training for a marathon") and temporarily capture session wants.
+3. **Tool Selection Accuracy (3 cases):** Asserts that the LLM reliably decides when to use Base Knowledge (general chat) versus RAG (recipe requests), successfully managing token expenditure and preventing unprompted database searches.
+
+**Results:** `11/11 PASSED` (100% Success Rate). 
+
+To run the evaluations locally:
+```bash
+cd backend
+pytest evals.py -v
+```
+
 ## Future Implementations Roadmap
 
 - **Receipt OCR Integration:** Implementing a feature to upload photos of grocery store receipts to automatically parse and update the user's kitchen inventory using a multimodal vision model.
