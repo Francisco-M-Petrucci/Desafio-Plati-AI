@@ -1,66 +1,98 @@
-# ChefCompanion — Personalized AI Recipe Assistant
+# ChefCompanion
 
 ChefCompanion is a local-first conversational web application that suggests hyper-personalized recipes to users based on their kitchen appliances, available ingredients, dietary restrictions, and seasonal preferences.
 
-The core AI engine uses **LangChain & LangGraph** for stateful routing and memory extraction, integrated with the **Nvidia NIM API** (`llama-3.1-70b-instruct` and `llama-3.2-11b-vision-instruct`).
+This project was built to demonstrate an AI assistant capable of long-term memory extraction and Retrieval-Augmented Generation (RAG) for the Plati AI challenge.
 
----
-
-## 🏗️ Architecture
+## Architecture
 
 ChefCompanion combines three layers of context to drive personalization:
-1. **Short-Term Context**: The active conversation window (last 10 messages from the database).
-2. **User Profile (SQLite)**: User inventory, available appliances, dietary restrictions, and long-term memory facts extracted by the AI across sessions.
-3. **Knowledge Base (RAG)**: A vector search collection loaded with 22 curated recipes matching the schema of the Food.com Recipes dataset.
 
-### Agent Workflow (LangGraph)
+1. **Short-Term Context**: Temporary preference tags ("Wants" and "Does Not Want") combined with a heavily compressed, minified history of recent agent actions. To prevent context bloat, only the most recent user message is passed into the prompt each turn, rather than a full rolling window.
+2. **User Profile & Long-Term Memory (SQLite)**: User inventory, available appliances, dietary restrictions, and permanent facts extracted programmatically across sessions.
+3. **Knowledge Base (RAG)**: A vector search collection loaded with curated recipes matching the schema of the Food.com Recipes dataset.
 
-```
-       START
-         │
-         ▼
- ┌───────────────┐
- │ Load Profile  │ ── Fetch user stock/appliances/restrictions/facts from SQLite
- └───────────────┘
-         │
-         ▼
- ┌───────────────┐
- │  Agent LLM    │ ── Formulate system prompt & decide tool call (RAG or inventory)
- └───────────────┘
-         │
-    ┌────┴────┐ (Conditional routing)
-    ▼         ▼
-[Tool Call] [Final Text]
-    │         │
-    │         ▼
-    │   ┌──────────────┐
-    │   │ Extract Facts│ ── Analyze exchange to extract permanent user preferences
-    │   └──────────────┘
-    │         │
-    ▼         ▼
- ┌──────┐    END
- │Tools │ ── Execute SQLite inventory updates or Vector DB queries
- └──────┘
-    │
-    ▼
- (Loop back to Agent LLM)
+### Agent Workflow (LangGraph Orchestration)
+
+```text
+          START
+            |
+            v
+    [ Load Profile ] ---- Fetch user stock/appliances/restrictions/facts from SQLite
+            |
+            v
+ [ Extract Preferences ]- Analyze latest message to extract facts and user intent
+            |
+            v
+      [ Pre-Filter ] ---- Filter recipes by appliances/diet before LLM sees them
+            |
+            v
+      [ Agent LLM ] ----- Formulate prompt & decide tool calls (RAG or inventory)
+            |
+       +----+----+ (Conditional routing)
+       v         v
+    [Tools]   [Output]
+       |         |
+       +---------+
+            |
+            v
+           END
 ```
 
----
+## Memory Strategy
 
-## 🛠️ Technology Stack & Rationale
+The system relies on a multi-layered memory approach:
+- **Fact Extraction Pre-Processing**: Before the main conversational LLM runs, a dedicated LangGraph node analyzes the user's latest message to extract permanent facts (e.g., "I am lactose intolerant") and temporary intents (e.g., "I want a quick dinner"). This is parsed as JSON and persisted directly to the SQLite database.
+- **Context Isolation**: Each user has an isolated profile in SQLite.
+- **Security & Prompt Injection**: The fact extraction prompt wraps user messages in XML tags (`<user_message>`) and explicitly instructs the extractor to ignore instructions inside the tags, preventing prompt injections from rewriting sensitive database facts.
 
-- **Backend**: `FastAPI` (Python) — Lightweight, fast asynchronous execution, and excellent auto-documentation.
-- **Agent Framework**: `LangChain` and `LangGraph` — Standard for stateful, multi-turn tool-calling workflows.
-- **Database**: `SQLite` (SQLAlchemy ORM) — Ideal for a local serverless environment, ensuring separate isolated contexts per user profile.
-- **Vector Store**: `Chroma` (with `ChromaONNXEmbeddings` fallback) — Runs completely serverless, stores embeddings locally, and provides fast cosine similarity.
-- **LLM Engine**: `Nvidia NIM API`
-  - *Text Reasoning & Tools*: `meta/llama-3.1-70b-instruct` (industry leader for multi-tool calling and extraction).
-  - *Vision Scanner*: `meta/llama-3.2-11b-vision-instruct` (lightweight, highly accurate multimodal model for receipt OCR).
+## Token Cost Minimization Strategies
 
----
+To maintain performance and keep token costs low:
+- **Deterministic Pre-Filtering**: Before querying the vector database or sending results to the LLM, the system programmatically filters out recipes that are incompatible with the user's registered dietary restrictions or appliances. This prevents wasting tokens on irrelevant data.
+- **Targeted RAG Invocation**: The LLM only searches the vector database when explicitly requested or when a recommendation intent is detected, falling back to general knowledge for basic cooking inquiries.
 
-## 🚀 How to Run Locally
+## Technology Stack & Rationale
+
+- **Agent Framework**: `LangChain` and `LangGraph`. LangGraph provides optimal control for stateful, multi-turn orchestration. It allows for strict routing between memory extraction, tool execution, and LLM reasoning based on specific application states.
+- **LLM Engine**: `Llama 3.3 70B Versatile` via **Groq**. 
+  - *Why*: This model excels at complex tool calling and delivers exceptional inference speeds. Furthermore, its massive 128k context window easily accommodates extensive conversational history and retrieved RAG documents without truncation risk. 
+  - *Note*: It is highly recommended to use the Groq Llama 3.3 70B Versatile model. Using alternative or weaker models may significantly degrade the agent's ability to output valid tool calls and follow strict JSON schemas.
+- **Database (Long-Term Memory)**: `SQLite`. Chosen for its lightweight, serverless nature. It is ideal for a local proof-of-concept, enabling rapid setup and seamless isolation of context per user without requiring external database hosting.
+- **Vector Store (Knowledge Base)**: `Chroma`. Operates entirely serverless and stores embeddings locally. It integrates seamlessly into Python workflows for rapid similarity searches without external dependencies.
+- **Backend**: `FastAPI` (Python). Lightweight, fast asynchronous execution, and excellent auto-documentation.
+
+## Main Challenges
+
+During development, the most significant challenge was identifying the right orchestration strategy and model. Initial iterations utilized a less capable model and a convoluted graph strategy, which resulted in continuous errors with tool-calling formats and schema adherence. By migrating to a simpler LangGraph architecture relying on a intent-extractor node, and upgrading to Groq's Llama 3.3 70B, development accelerated significantly, resolving the tool-calling inconsistencies and improving overall reliability.
+
+## Demonstrable Personalization (Test Cases)
+
+To verify hyper-personalization, use the pre-seeded test personas (password: `password123`):
+
+### User A: Alice (Gluten-Free, Quick Cook)
+**Profile:** Airfryer owner, Gluten-Free, prefers quick meals.
+1. **Direct Request:** Ask *"I'm really hungry and I only have about 20 minutes to cook something. What can I make with my chicken wings?"*
+   **Result:** Recommends a fast airfryer recipe based on her ingredients and facts.
+2. **Dietary Safety Check:** Ask *"Can I make a classic pasta dish?"*
+   **Result:** The strict pre-filter blocks all gluten recipes. The AI will only present 100% gluten-free alternatives.
+
+### User B: Bob (Vegetarian, Traditional Italian)
+**Profile:** Oven owner, Vegetarian, dislikes spicy food.
+1. **Memory Check:** Ask *"I want to make something really spicy for dinner, just for tonight."*
+   **Result:** The agent checks his long-term facts and gently reminds him he usually dislikes spicy food.
+2. **RAG vs Base Knowledge:** Ask *"I have some pizza dough and fresh mozzarella. Walk me through making a pizza step-by-step."*
+   **Result:** The agent answers from general knowledge.
+   Then ask: *"Walk me through making a margherita pizza step-by-step."*
+   **Result:** The agent fetches the specific *Classic Italian Margherita Pizza* from the vector database.
+
+## Future Implementations Roadmap
+
+- **Receipt OCR Integration:** Implementing a feature to upload photos of grocery store receipts to automatically parse and update the user's kitchen inventory using a multimodal vision model.
+- **Expanded Recipe Database:** Significantly increasing the size of the Chroma vector database to include a much wider variety of recipes from different cuisines and dietary niches.
+- **Cooking Assistance Mode:** Creating a dedicated hands-free interface mode designed for active cooking. It will feature large, accessible buttons for step-by-step navigation, ensuring users with messy or occupied hands don't need to type messages.
+
+## How to Run Locally
 
 ### 1. Prerequisites
 - Python 3.10+
@@ -71,10 +103,9 @@ Copy `.env.example` to `.env` in the project root and fill in your keys:
 ```bash
 cp .env.example .env
 ```
-Ensure at least your `NVIDIA_API_KEY` is populated.
+Ensure your `GROQ_API_KEY` is populated for the primary LLM.
 
 ### 3. Automated Setup
-
 The easiest way to install all dependencies and seed the database is using the setup scripts.
 
 **For Windows:**
@@ -89,9 +120,6 @@ chmod +x setup.sh start.sh
 ```
 
 ### 4. Start the Application
-
-Once setup is complete, you can start both the backend and frontend servers with a single command.
-
 **For Windows:**
 ```cmd
 start.bat
@@ -101,34 +129,4 @@ start.bat
 ```bash
 ./start.sh
 ```
-
-Both servers will launch. The application will be available at [http://localhost:5173](http://localhost:5173).
-
----
-
-## 🍽️ Demonstrable Personalization Scenarios
-
-You can verify hyper-personalization immediately by using the preseeded test personas:
-
-### User A: Alice (Gluten-Free, Low-Carb, Airfryer owner)
-1. Log in as **Alice**.
-2. Go to **My Kitchen** to see preloaded stock (chicken wings, parmesan cheese, garlic powder, parsley) and restrictions.
-3. In **Assistant Chat**, ask: *"What should I cook for dinner today?"*
-4. **AI response**: Recommends *Airfryer Garlic Parmesan Chicken Wings* (since it is low-carb, gluten-free, matches her airfryer, and uses her chicken wings).
-
-### User B: Bob (Vegetarian, Oven owner, loves Italian)
-1. Log in as **Bob**.
-2. Go to **My Kitchen** to see stock (pizza dough, tomatoes, fresh mozzarella, basil) and restrictions.
-3. In **Assistant Chat**, ask: *"What should I cook for dinner today?"*
-4. **AI response**: Recommends *Classic Italian Margherita Pizza* (since it is vegetarian, matches his oven, and uses his pizza dough/mozzarella).
-
-### Long-Term Memory Test
-1. Log in as any user.
-2. In Chat, tell the assistant: *"I training for a half-marathon and need carb-heavy meals next week. Also, I absolutely hate mushrooms."*
-3. Log out and log back in.
-4. Go to **My Kitchen** and notice the new facts saved under **AI Long-Term Memory**:
-   - `Training for a half-marathon`
-   - `Needs carb-heavy meals`
-   - `Hates mushrooms`
-5. Ask: *"Suggest a dinner recipe."*
-6. **AI response**: Recommends a high-carb dish (e.g. Pasta Primavera) and avoids Creamy Mushroom Risotto, explicitly referencing the marathon training.
+The application will be available at http://localhost:5173.
