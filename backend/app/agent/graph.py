@@ -127,9 +127,14 @@ def update_inventory_tool(action: str, items: List[str]) -> str:
 
 
 @tool
-def get_recipe_details_tool(recipe_id: int) -> str:
+def get_recipe_details_tool(query: str) -> str:
     """
-    Get full ingredients and cooking steps for a recipe by its ID.
+    Retrieve full ingredients and cooking steps for a specific, complex recipe from our database.
+    Input can be a recipe ID (e.g. "104") or a specific dish name (e.g. "Margherita Pizza").
+    
+    CRITICAL: Do NOT use this tool for general cooking questions, basic techniques, 
+    or simple single-ingredient preparations (e.g., "how to boil an egg", "how to cook rice"). 
+    Answer those directly from your own knowledge.
     """
     return "Tool executed by runner."
 
@@ -1032,18 +1037,34 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
 
         elif name == "get_recipe_details_tool":
             can_short_circuit = False  # Disable short circuit so LLM can answer questions about the recipe
-            recipe_id = args.get("recipe_id")
+            query_arg = args.get("query") or args.get("recipe_id")
+            recipe_id = None
+            if query_arg is not None:
+                query_str = str(query_arg).strip()
+                if query_str.isdigit():
+                    recipe_id = int(query_str)
+                else:
+                    # Perform a quick search to find the best match for the string query
+                    print(f"get_recipe_details_tool: Searching for '{query_str}' to find recipe ID")
+                    candidates = recipe_db.search_recipes_filtered(
+                        query=query_str,
+                        recipe_ids=compatible_ids,
+                        limit=1
+                    )
+                    if candidates:
+                        recipe_id = candidates[0]["id"]
+                        print(f"get_recipe_details_tool: Found ID {recipe_id} for query '{query_str}'")
+
             if recipe_id is not None:
-                try:
-                    recipe_id = int(recipe_id)
-                except (TypeError, ValueError):
-                    pass
-            print(f"Executing get_recipe_details_tool: recipe_id={recipe_id}")
-            # Retrieve details and format in Python
-            result_str = get_recipe_details_by_id(recipe_id, state["user_profile"]["ingredients"])
+                print(f"Executing get_recipe_details_tool: recipe_id={recipe_id}")
+                # Retrieve details and format in Python
+                result_str = get_recipe_details_by_id(recipe_id, state["user_profile"]["ingredients"])
+                actions.append(f"Retrieved details for recipe ID: {recipe_id}")
+            else:
+                result_str = f"Could not find any recipe matching '{query_arg}'. Please try a different dish."
+                actions.append(f"Failed to retrieve details for: {query_arg}")
             
             new_messages.append(ToolMessage(content=result_str, tool_call_id=call_id))
-            actions.append(f"Retrieved details for recipe ID: {recipe_id}")
 
         elif name == "get_inventory_tool":
             can_short_circuit = False

@@ -85,117 +85,118 @@ def seed_database():
     
     # 1. Create User A (Alice)
     alice = db.query(User).filter(User.username == "alice").first()
-    if not alice:
-        print("Seeding user Alice...")
-        alice = User(username="alice", password="password123", first_name="Alice")
-        db.add(alice)
+    if alice:
+        print("Deleting existing user Alice to recreate...")
+        db.delete(alice)
         db.commit()
-        db.refresh(alice)
         
-        # Add appliances
-        db.add_all([
-            Appliance(user_id=alice.id, name="airfryer"),
-            Appliance(user_id=alice.id, name="blender/mixer")
-        ])
-        
-        # Add ingredients
-        from app.ingredients_formatter import standardize_ingredient
-        db.add_all([
-            Ingredient(user_id=alice.id, name=standardize_ingredient("chicken wings"), quantity=1.0, unit="kg"),
-            Ingredient(user_id=alice.id, name=standardize_ingredient("olive oil"), quantity=500.0, unit="ml"),
-            Ingredient(user_id=alice.id, name=standardize_ingredient("garlic powder"), quantity=1.0, unit="jar"),
-            Ingredient(user_id=alice.id, name=standardize_ingredient("parmesan cheese"), quantity=200.0, unit="g"),
-            Ingredient(user_id=alice.id, name=standardize_ingredient("salt"), quantity=1.0, unit="pack"),
-            Ingredient(user_id=alice.id, name=standardize_ingredient("black pepper"), quantity=1.0, unit="shaker"),
-            Ingredient(user_id=alice.id, name=standardize_ingredient("parsley"), quantity=1.0, unit="bunch")
-        ])
-        
-        # Add dietary restrictions
-        db.add_all([
-            DietaryRestriction(user_id=alice.id, restriction="gluten-free"),
-            DietaryRestriction(user_id=alice.id, restriction="low-carb")
-        ])
-        
-        # Add long-term facts
-        db.add_all([
-            UserFact(user_id=alice.id, fact="Prefers quick and easy meals under 30 minutes"),
-            UserFact(user_id=alice.id, fact="Loves garlic and savory flavors"),
-            UserFact(user_id=alice.id, fact="Allergic to peanuts")
-        ])
-        db.commit()
-        print("Alice seeded successfully.")
-    else:
-        print("User Alice already exists. Ensuring first_name is set.")
-        alice.first_name = "Alice"
-        db.commit()
-
-    # Clear existing initial matches for Alice to rebuild
-    db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == alice.id).delete()
+    print("Seeding user Alice...")
+    alice = User(username="alice", password="password123", first_name="Alice")
+    db.add(alice)
     db.commit()
+    db.refresh(alice)
+        
+    # Add appliances
+    db.add_all([
+        Appliance(user_id=alice.id, name="stove"),
+        Appliance(user_id=alice.id, name="airfryer"),
+        Appliance(user_id=alice.id, name="blender/mixer")
+    ])
+    
+    # Add ingredients
+    from app.ingredients_formatter import standardize_ingredient
+    db.add_all([
+        Ingredient(user_id=alice.id, name=standardize_ingredient("salt"), quantity=1.0, unit="pack"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("olive oil"), quantity=500.0, unit="ml"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("garlic"), quantity=5.0, unit="cloves"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("onion"), quantity=3.0, unit="unit"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("black pepper"), quantity=1.0, unit="shaker"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("cilantro"), quantity=1.0, unit="bunch"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("lime juice"), quantity=200.0, unit="ml"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("chicken wings"), quantity=1.0, unit="kg"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("parmesan cheese"), quantity=200.0, unit="g"),
+        Ingredient(user_id=alice.id, name=standardize_ingredient("sweet potatoes"), quantity=1.0, unit="kg")
+    ])
+    
+    # Add dietary restrictions
+    db.add_all([
+        DietaryRestriction(user_id=alice.id, restriction="gluten-free")
+    ])
+    
+    # Add long-term facts
+    db.add_all([
+        UserFact(user_id=alice.id, fact="Prefers quick and easy meals"),
+        UserFact(user_id=alice.id, fact="Loves savory flavors")
+    ])
+    db.commit()
+    print("Alice seeded successfully.")
 
     # Populate Alice initial recipes
     populate_initial_search_recipes(
         db, alice,
-        appliances=["airfryer", "blender/mixer"],
-        restrictions=["gluten-free", "low-carb"],
-        ingredients=["chicken wings", "olive oil", "garlic powder", "parmesan cheese", "salt", "black pepper", "parsley"]
+        appliances=["stove", "airfryer", "blender/mixer"],
+        restrictions=["gluten-free"],
+        ingredients=["salt", "olive oil", "garlic", "onion", "black pepper", "cilantro", "lime juice", "chicken wings", "parmesan cheese", "sweet potatoes"]
     )
 
     # 2. Create User B (Bob)
     bob = db.query(User).filter(User.username == "bob").first()
-    if not bob:
-        print("Seeding user Bob...")
-        bob = User(username="bob", password="password123", first_name="Bob")
-        db.add(bob)
+    if bob:
+        print("Deleting existing user Bob to recreate...")
+        db.delete(bob)
         db.commit()
-        db.refresh(bob)
         
-        # Add appliances
-        db.add_all([
-            Appliance(user_id=bob.id, name="oven"),
-            Appliance(user_id=bob.id, name="stove"),
-            Appliance(user_id=bob.id, name="blender/mixer")
-        ])
-        
-        # Add ingredients
-        from app.ingredients_formatter import standardize_ingredient
-        db.add_all([
-            Ingredient(user_id=bob.id, name=standardize_ingredient("pizza dough"), quantity=1.0, unit="unit"),
-            Ingredient(user_id=bob.id, name=standardize_ingredient("canned san marzano tomatoes"), quantity=1.0, unit="can"),
-            Ingredient(user_id=bob.id, name=standardize_ingredient("fresh mozzarella cheese"), quantity=250.0, unit="g"),
-            Ingredient(user_id=bob.id, name=standardize_ingredient("fresh basil leaves"), quantity=1.0, unit="bunch"),
-            Ingredient(user_id=bob.id, name=standardize_ingredient("extra virgin olive oil"), quantity=500.0, unit="ml"),
-            Ingredient(user_id=bob.id, name=standardize_ingredient("salt"), quantity=1.0, unit="pack")
-        ])
-        
-        # Add dietary restrictions
-        db.add_all([
-            DietaryRestriction(user_id=bob.id, restriction="vegetarian")
-        ])
-        
-        # Add long-term facts
-        db.add_all([
-            UserFact(user_id=bob.id, fact="Loves authentic Italian food"),
-            UserFact(user_id=bob.id, fact="Likes to cook from scratch"),
-            UserFact(user_id=bob.id, fact="Dislikes spicy food")
-        ])
-        db.commit()
-        print("Bob seeded successfully.")
-    else:
-        print("User Bob already exists. Ensuring first_name is set.")
-        bob.first_name = "Bob"
-        db.commit()
-
-    # Clear existing initial matches for Bob to rebuild
-    db.query(InitialSearchRecipe).filter(InitialSearchRecipe.user_id == bob.id).delete()
+    print("Seeding user Bob...")
+    bob = User(username="bob", password="password123", first_name="Bob")
+    db.add(bob)
     db.commit()
+    db.refresh(bob)
+        
+    # Add appliances
+    db.add_all([
+        Appliance(user_id=bob.id, name="oven"),
+        Appliance(user_id=bob.id, name="stove"),
+        Appliance(user_id=bob.id, name="microwave"),
+        Appliance(user_id=bob.id, name="blender/mixer")
+    ])
+    
+    # Add ingredients
+    from app.ingredients_formatter import standardize_ingredient
+    db.add_all([
+        Ingredient(user_id=bob.id, name=standardize_ingredient("salt"), quantity=1.0, unit="pack"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("garlic"), quantity=5.0, unit="cloves"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("olive oil"), quantity=500.0, unit="ml"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("butter"), quantity=250.0, unit="g"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("vanilla extract"), quantity=1.0, unit="bottle"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("eggs"), quantity=12.0, unit="unit"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("pizza dough"), quantity=1.0, unit="unit"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("fresh mozzarella cheese"), quantity=250.0, unit="g"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("canned san marzano tomatoes"), quantity=1.0, unit="can"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("fresh basil leaves"), quantity=1.0, unit="bunch"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("penne pasta"), quantity=500.0, unit="g"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("roma tomato"), quantity=4.0, unit="unit"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("onion"), quantity=2.0, unit="unit")
+    ])
+    
+    # Add dietary restrictions
+    db.add_all([
+        DietaryRestriction(user_id=bob.id, restriction="vegetarian")
+    ])
+    
+    # Add long-term facts
+    db.add_all([
+        UserFact(user_id=bob.id, fact="Loves authentic Italian food"),
+        UserFact(user_id=bob.id, fact="Dislikes spicy food")
+    ])
+    db.commit()
+    print("Bob seeded successfully.")
 
     # Populate Bob initial recipes
     populate_initial_search_recipes(
         db, bob,
-        appliances=["oven", "stove", "blender/mixer"],
+        appliances=["oven", "stove", "microwave", "blender/mixer"],
         restrictions=["vegetarian"],
-        ingredients=["pizza dough", "canned san marzano tomatoes", "fresh mozzarella cheese", "fresh basil leaves", "extra virgin olive oil", "salt"]
+        ingredients=["salt", "garlic", "olive oil", "butter", "vanilla extract", "eggs", "pizza dough", "fresh mozzarella cheese", "canned san marzano tomatoes", "fresh basil leaves", "penne pasta", "roma tomato", "onion"]
     )
 
     # 3. Handle User C (Carol)
