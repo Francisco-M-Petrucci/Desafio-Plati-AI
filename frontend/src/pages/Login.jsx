@@ -6,7 +6,7 @@ const API_BASE = 'http://localhost:8000';
 
 function Login({ onLoginSuccess, onRegisterToggle }) {
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('password123'); // Default password for easy demo
+  const [password, setPassword] = useState(''); // Default password for easy demo
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 

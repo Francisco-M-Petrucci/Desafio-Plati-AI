@@ -497,7 +497,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Sparkles size={16} style={{ color: 'hsl(var(--secondary))' }} />
-              AI Long-Term Memory
+              Long-Term Memory
             </h2>
             {profile.facts.length > 0 && (
               <button 
@@ -531,7 +531,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Sparkles size={16} style={{ color: 'hsl(var(--primary))' }} />
-              AI Short-Term Wants (Temporary)
+              Short-Term Wants (Temporary)
             </h2>
             {wantsList.length > 0 && (
               <button 
@@ -596,7 +596,7 @@ function ProfileManager({ user, profile, isLoading, onProfileUpdate }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Sparkles size={16} style={{ color: 'hsl(var(--danger))' }} />
-              AI Short-Term Dislikes (Temporary)
+              Short-Term Dislikes (Temporary)
             </h2>
             {notWantsList.length > 0 && (
               <button 

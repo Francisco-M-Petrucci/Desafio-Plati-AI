@@ -369,38 +369,7 @@ function ChatInterface({ user, profile, onProfileUpdate }) {
             </button>
           </form>
 
-          {/* Drag & Drop Receipt Zone */}
-          <div 
-            className={`receipt-upload-zone ${dragActive ? 'drag-active' : ''}`}
-            onDragEnter={handleDrag}
-            onDragOver={handleDrag}
-            onDragLeave={handleDrag}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              style={{ display: 'none' }} 
-              accept="image/*"
-              onChange={handleFileChange}
-              disabled={isUploading || isSending}
-            />
-            
-            {isUploading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'hsl(var(--primary))' }}>
-                <Loader2 size={18} className="pulse" style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>Analyzing Receipt with Llama 3.2 Vision...</span>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'hsl(var(--text-secondary))' }}>
-                <Upload size={16} />
-                <span style={{ fontSize: '0.85rem' }}>
-                  <strong>Upload shopping receipt photo</strong> or drag & drop to auto-extract ingredients (PNG/JPG)
-                </span>
-              </div>
-            )}
-          </div>
+
         </div>
 
       </div>

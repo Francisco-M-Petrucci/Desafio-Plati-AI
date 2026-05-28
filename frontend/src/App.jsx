@@ -116,7 +116,7 @@ function App() {
           
           <button 
             className={`btn-secondary ${activeTab === 'dashboard' ? 'active-nav' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => { setActiveTab('dashboard'); fetchProfile(); }}
             style={{ 
               borderColor: activeTab === 'dashboard' ? 'hsl(var(--primary))' : 'transparent',
               background: activeTab === 'dashboard' ? 'rgba(16, 185, 129, 0.08)' : ''

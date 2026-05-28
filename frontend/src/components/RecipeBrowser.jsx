@@ -142,7 +142,7 @@ function RecipeBrowser({ user, profile }) {
             <div style={{ marginBottom: '2rem' }}>
               <h3 style={{ fontSize: '1rem', fontFamily: 'var(--font-display)', fontWeight: '700', color: 'hsl(var(--primary))', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <BookOpen size={16} />
-                <span>✨ Handcrafted Onboarding Matches</span>
+                <span>✨ Your Personalized Matches</span>
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {initialRecipes.map(recipe => {
