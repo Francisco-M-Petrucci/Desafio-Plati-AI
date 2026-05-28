@@ -452,7 +452,7 @@ def _parse_failed_tool_call(error: Exception) -> Optional[dict]:
     
     # Parse the <function=name ...></function> pattern
     # Llama might omit the space between the function name and the JSON arguments.
-    match = re.search(r'<function=(\w+)\s*(\{.*?\})\s*>?\s*</function>', failed_gen, re.DOTALL)
+    match = re.search(r'<function=(\w+)[>\s]*(\{.*?\})[>\s]*</function>', failed_gen, re.DOTALL)
     if not match:
         return None
     
@@ -743,6 +743,34 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         else:
             raise
     
+    # Fallback: parse raw <function=...> tags if they leaked into content natively
+    if response.content and "<function=" in response.content:
+        import re
+        import uuid
+        import json
+        
+        matches = list(re.finditer(r'<function=(\w+)[>\s]*(\{.*?\})[>\s]*</function>', response.content, re.DOTALL))
+        for match in matches:
+            func_name = match.group(1)
+            try:
+                args = json.loads(match.group(2))
+                # Only add if not already in tool_calls natively
+                if not any(tc.get("name") == func_name for tc in response.tool_calls):
+                    if not getattr(response, "tool_calls", None):
+                        response.tool_calls = []
+                    response.tool_calls.append({
+                        "name": func_name,
+                        "args": args,
+                        "id": f"call_{uuid.uuid4().hex[:24]}"
+                    })
+                    print(f"Recovered from raw text: parsed tool call '{func_name}'")
+            except json.JSONDecodeError:
+                pass
+                
+    # Enforce strict "no preamble" rule when tool calls are made
+    if getattr(response, "tool_calls", None):
+        response.content = ""
+
     # Intercept and override response if user merely used ingredients but didn't run out
     if not response.tool_calls:
         latest_user_msg_lower = latest_user_msg.lower().strip() if latest_user_msg else ""
@@ -955,18 +983,9 @@ def tools_runner_node(state: AgentState) -> Dict[str, Any]:
                     season=season
                 )
                 
-                # Fallback: if no results with culture/season filter, retry without culture/season
-                if not candidates and (culture or season):
-                    print(f"No results with culture='{culture}'/season='{season}', falling back to all compatible recipes")
-                    candidates = recipe_db.search_recipes_filtered(
-                        query=query,
-                        recipe_ids=search_pool,
-                        excluded_ids=excluded_ids,
-                        limit=10,
-                        culture=None,
-                        season=None
-                    )
-                
+                # Removed fallback logic. If a user asks for a specific culture/season and none are available,
+                # we want to honestly return no results so the LLM can inform the user, rather than returning
+                # unrelated cuisines and causing the LLM to hallucinate to cover up the mismatch.
                 if not candidates:
                     print("No candidate recipes found.")
                     break

@@ -48,9 +48,11 @@ These accounts have been specially crafted to yield different recipe results, sh
     *   Open the cooking assistant chat.
     *   Type: *"I want to make something really spicy for dinner, just for tonight."*
     *   *Agent Capability:* The agent should refer to Bob's long-term facts ("Dislikes spicy food") and gently remind him or ask if he's sure, demonstrating personalized memory.
-4.  **Chat Interaction - Ingredient Matchmaking:**
+4.  **Chat Interaction - Database vs General Knowledge:**
     *   Type: *"I have some pizza dough and fresh mozzarella. Walk me through making a pizza step-by-step."*
-    *   *Agent Capability:* The agent should identify the *Classic Italian Margherita Pizza* recipe, confirm he has the necessary oven appliance, and begin presenting the steps interactively.
+    *   *Agent Capability:* Notice that the agent answers how to make a generic pizza from its own general knowledge without accessing the database.
+    *   Then, type: *"Walk me through making a margherita pizza step-by-step."*
+    *   *Agent Capability:* Notice that the agent will fetch the *Classic Italian Margherita Pizza* recipe from the database instead. This shows that the agent is still able to answer basic cooking questions, but prioritizes the database when possible.
 
 ---
 
