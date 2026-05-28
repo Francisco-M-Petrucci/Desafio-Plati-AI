@@ -1,3 +1,4 @@
+(Pt-Br version available)
 # ChefCompanion
 
 ChefCompanion is a local-first conversational web application that suggests hyper-personalized recipes to users based on their kitchen appliances, available ingredients, dietary restrictions, and seasonal preferences.
