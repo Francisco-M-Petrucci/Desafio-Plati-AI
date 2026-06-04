@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const body = document.body;
     const viewContainer = document.getElementById('viewContainer');
     const slideSections = document.querySelectorAll('.slide-section');
-    const themeToggleBtn = document.getElementById('themeToggleBtn');
     
     // Mode Switchers
     const modeButtons = document.querySelectorAll('.mode-btn');
@@ -40,17 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMode = 'presentation'; // 'presentation' or 'landing'
 
     /* ==========================================================================
-       THEMING LOGIC
+       THEMING LOGIC (Removida)
        ========================================================================== */
-    themeToggleBtn.addEventListener('click', () => {
-        if (body.classList.contains('dark-theme')) {
-            body.classList.remove('dark-theme');
-            body.classList.add('light-theme');
-        } else {
-            body.classList.remove('light-theme');
-            body.classList.add('dark-theme');
-        }
-    });
 
     /* ==========================================================================
        VIEW MODE CONTROLLER (PRESENTATION vs LANDING)
