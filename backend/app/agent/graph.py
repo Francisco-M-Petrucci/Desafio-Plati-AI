@@ -788,7 +788,7 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
         has_use = any(re.search(r'\b' + re.escape(kw) + r'\b', latest_user_msg_lower) for kw in use_keywords)
         has_run_out = any(re.search(r'\b' + re.escape(kw) + r'\b', latest_user_msg_lower) for kw in run_out_keywords)
         
-        is_recipe_request = (state.get("user_intent") == "recipe_recommendation_request")
+        is_recipe_request = ("recipe_recommendation_request" in state.get("user_intents", []))
         is_checking_inventory = any(kw in latest_user_msg_lower for kw in ["do i have", "what do i have", "what ingredients", "list my", "show my"])
         
         # Also check if LLM generated response contains explanations that they still have it

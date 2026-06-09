@@ -13,7 +13,7 @@ if not exist ".env" (
 
 echo.
 echo [2/5] Creating Python virtual environment...
-python -m venv venv
+call python -m venv venv
 if %ERRORLEVEL% neq 0 (
     echo Failed to create virtual environment.
     pause
@@ -23,7 +23,7 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo [3/5] Installing backend dependencies...
 call .\venv\Scripts\activate.bat
-pip install -r backend\requirements.txt
+call pip install -r backend\requirements.txt
 if %ERRORLEVEL% neq 0 (
     echo Failed to install Python dependencies.
     pause
@@ -33,7 +33,7 @@ if %ERRORLEVEL% neq 0 (
 echo.
 echo [4/5] Seeding database...
 set PYTHONPATH=backend
-python backend\seed.py
+call python backend\seed.py
 if %ERRORLEVEL% neq 0 (
     echo Failed to seed database.
     pause
