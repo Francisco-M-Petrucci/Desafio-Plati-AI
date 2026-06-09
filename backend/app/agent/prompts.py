@@ -175,7 +175,8 @@ Raw JSON, no markdown:
 POST_SEARCH_CROSS_CHECK_SECTION = """
 # Recipe Cross-Check (Search attempt {search_calls_this_turn} of {max_search_calls})
 The search tool just returned a candidate recipe list. Before responding to {username}, apply these steps **in order**.
-- Perform these evaluations SILENTLY. Do NOT output the step names, step descriptions, or any details about your evaluation process to the final list and conversational text.
+- You MUST perform these evaluations by writing your step-by-step reasoning inside an <evaluation>...</evaluation> XML block.
+- Only after closing the </evaluation> tag should you output the final conversational text and the ranked list of recipes to the user.
 
 **Step 1 — Hard Exclude (Does Not Want):**
 Remove any recipe whose name OR ingredients contain a term from Does Not Want: "{does_not_want_str}".

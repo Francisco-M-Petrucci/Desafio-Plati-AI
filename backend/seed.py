@@ -175,7 +175,8 @@ def seed_database():
         Ingredient(user_id=bob.id, name=standardize_ingredient("fresh basil leaves"), quantity=1.0, unit="bunch"),
         Ingredient(user_id=bob.id, name=standardize_ingredient("penne pasta"), quantity=500.0, unit="g"),
         Ingredient(user_id=bob.id, name=standardize_ingredient("roma tomato"), quantity=4.0, unit="unit"),
-        Ingredient(user_id=bob.id, name=standardize_ingredient("onion"), quantity=2.0, unit="unit")
+        Ingredient(user_id=bob.id, name=standardize_ingredient("onion"), quantity=2.0, unit="unit"),
+        Ingredient(user_id=bob.id, name=standardize_ingredient("jalapeno"), quantity=3.0, unit="unit")
     ])
     
     # Add dietary restrictions
@@ -196,7 +197,7 @@ def seed_database():
         db, bob,
         appliances=["oven", "stove", "microwave", "blender/mixer"],
         restrictions=["vegetarian"],
-        ingredients=["salt", "garlic", "olive oil", "butter", "vanilla extract", "eggs", "pizza dough", "fresh mozzarella cheese", "canned san marzano tomatoes", "fresh basil leaves", "penne pasta", "roma tomato", "onion"]
+        ingredients=["salt", "garlic", "olive oil", "butter", "vanilla extract", "eggs", "pizza dough", "fresh mozzarella cheese", "canned san marzano tomatoes", "fresh basil leaves", "penne pasta", "roma tomato", "onion", "jalapeno"]
     )
 
     # 3. Handle User C (Carol)

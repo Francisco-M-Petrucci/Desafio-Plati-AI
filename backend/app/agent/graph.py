@@ -818,6 +818,10 @@ def agent_node(state: AgentState) -> Dict[str, Any]:
             username = state["user_name"].capitalize() if state.get("user_name") else "Carol"
             response.content = f"Ok {username}!, If you completely run out of those ingredients, let me know anytime!"
             
+    if response.content:
+        import re
+        response.content = re.sub(r'<evaluation>.*?</evaluation>', '', response.content, flags=re.DOTALL).strip()
+            
     output = {"messages": [response]}
     if rag_recipes:
         output["rag_recipes"] = rag_recipes
